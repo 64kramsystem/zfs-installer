@@ -484,8 +484,12 @@ function custom_install_operating_system {
 
 function sync_os_temp_installation_dir_to_rpool {
   # Extended attributes are not used on a standard Ubuntu installation, however, this needs to be generic.
+  # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
+  # ❤️ Perl ❤️
   #
-  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$v_os_temp_installation_dir/" "$c_mount_dir"
+  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$v_os_temp_installation_dir/" "$c_mount_dir" |
+    perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
+    whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
   umount "$v_os_temp_installation_dir"
 }

@@ -16,7 +16,6 @@ set -o nounset
 v_bpool_name=
 v_bpool_tweaks=              # see defaults below for format
 v_encrypt_rpool=             # 0=false, 1=true
-v_os_temp_installation_dir=
 v_passphrase=
 v_rpool_name=
 v_rpool_tweaks=              # see defaults below for format
@@ -28,6 +27,7 @@ v_temp_volume_device=        # /dev/zdN
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_mount_dir=/mnt
+c_ubiquity_destination_mount=/target
 
 # HELPER FUNCTIONS #############################################################
 
@@ -94,19 +94,19 @@ The procedure can be entirely automated via environment variables:
 - ZFS_PASSPHRASE
 - ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
-- ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `'"$c_default_bpool_tweaks"'`)
-- ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `'"$c_default_rpool_tweaks"'`)
+- ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `'$c_default_bpool_tweaks'`)
+- ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `'$c_default_rpool_tweaks'`)
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer number); set 0 for no swap
 
 Note that the pools are created using the disk ids, also when $ZFS_SELECTED_DISKS is set.
 
-When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the script will prepare an ext4 partition on a ZFS volume, to install the O/S on, and execute the script with administrative permissions.
-The requisites are:
 
-- the O/S must be installed on the ext4 partition (`/dev/zd16`);
-- the partition must be dismountable (e.g. no file locks, no swap etc.);
-- at the end of the O/S installation, the script must print a line to stdout (`echo` will do) with the mountpoint where the O/S has been installed.
+When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `'$c_mount_dir'`; the requisites are:
+
+1. the virtual filesystems must be mounted in `'$c_mount_dir'` (ie. `for vfs in proc sys dev; do mount --rbind /$vfs '$c_mount_dir'/$vfs; done`)
+2. internet must be accessible while chrooting in `'$c_mount_dir'` (ie. `echo nameserver 8.8.8.8 >> '$c_mount_dir'/etc/resolv.conf`)
+3. `'$c_mount_dir'` must be left in a dismountable state (e.g. no file locks, no swap etc.);
 '
 
   echo "$help"
@@ -472,14 +472,6 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   ubiquity --no-bootloader
 
   swapoff -a
-
-  v_os_temp_installation_dir=/target
-}
-
-function custom_install_operating_system {
-  print_step_info_header
-
-  v_os_temp_installation_dir="$(sudo "$ZFS_OS_INSTALLATION_SCRIPT" | tail -n 1)"
 }
 
 function sync_os_temp_installation_dir_to_rpool {
@@ -487,11 +479,11 @@ function sync_os_temp_installation_dir_to_rpool {
   # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
   # ❤️ Perl ❤️
   #
-  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$v_os_temp_installation_dir/" "$c_mount_dir" |
+  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_ubiquity_destination_mount/" "$c_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
-  umount "$v_os_temp_installation_dir"
+  umount "$c_ubiquity_destination_mount"
 }
 
 function destroy_temp_volume {
@@ -506,6 +498,12 @@ function prepare_jail {
   done
 
   chroot_execute 'echo "nameserver 8.8.8.8" >> /etc/resolv.conf'
+}
+
+function custom_install_operating_system {
+  print_step_info_header
+
+  sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
 function install_zfs_0.8_packages {
@@ -659,16 +657,16 @@ ask_pool_tweaks
 install_zfs_module
 prepare_disks
 
-create_temp_volume
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
+  create_temp_volume
   install_operating_system
+  sync_os_temp_installation_dir_to_rpool
+  destroy_temp_volume
+  prepare_jail
 else
   custom_install_operating_system
 fi
-sync_os_temp_installation_dir_to_rpool
-destroy_temp_volume
 
-prepare_jail
 install_zfs_0.8_packages
 install_and_configure_bootloader
 clone_efi_partition

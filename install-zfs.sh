@@ -21,6 +21,7 @@ v_rpool_name=
 v_rpool_tweaks=              # see defaults below for format
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
+v_free_tail_space=           # integer
 declare -a v_system_disks    # (/dev/by-id/disk_id, ...)
 v_temp_volume_device=        # /dev/zdN
 
@@ -98,6 +99,7 @@ The procedure can be entirely automated via environment variables:
 - ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `'$c_default_rpool_tweaks'`)
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer number); set 0 for no swap
+- ZFS_FREE_TAIL_SPACE        : leave free space at the end of each disk (integer number), for example, for a swap partition
 
 When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `'$c_mount_dir'`; the requisites are:
 
@@ -258,6 +260,24 @@ function ask_swap_size {
   print_variables v_swap_size
 }
 
+function ask_free_tail_space {
+  print_step_info_header
+
+  if [[ ${ZFS_FREE_TAIL_SPACE:-} != "" ]]; then
+    v_free_tail_space=$ZFS_FREE_TAIL_SPACE
+  else
+   local tail_space_invalid_message=
+
+    while [[ ! $v_free_tail_space =~ ^[0-9]+$ ]]; do
+      v_free_tail_space=$(whiptail --inputbox "${tail_space_invalid_message}Enter the space to leave at the end of each disk (0 for none):" 30 100 0 3>&1 1>&2 2>&3)
+
+      tail_space_invalid_message="Invalid size! "
+    done
+  fi
+
+  print_variables v_free_tail_space
+}
+
 function ask_pool_names {
   print_step_info_header
 
@@ -325,14 +345,20 @@ function prepare_disks {
 
   # PARTITIONS #########################
 
+  if [[ $v_free_tail_space -eq 0 ]]; then
+    local tail_space_parameter=0
+  else
+    local tail_space_parameter="-${v_free_tail_space}G"
+  fi
+
   for selected_disk in "${v_selected_disks[@]}"; do
     # More thorough than `sgdisk --zap-all`.
     #
     wipefs --all "$selected_disk"
 
-    sgdisk -n1:1M:+512M   -t1:EF00 "$selected_disk" # EFI boot
-    sgdisk -n2:0:+512M    -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:0        -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n1:1M:+512M                  -t1:EF00 "$selected_disk" # EFI boot
+    sgdisk -n2:0:+512M                   -t2:BF01 "$selected_disk" # Boot pool
+    sgdisk -n3:0:"$tail_space_parameter" -t3:BF01 "$selected_disk" # Root pool
   done
 
   # The partition symlinks are not immediately created, so we wait.
@@ -635,6 +661,7 @@ find_disks
 select_disks
 ask_encryption
 ask_swap_size
+ask_free_tail_space
 ask_pool_names
 ask_pool_tweaks
 

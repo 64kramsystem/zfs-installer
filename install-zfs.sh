@@ -21,7 +21,7 @@ v_rpool_name=
 v_rpool_tweaks=              # see defaults below for format
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
-declare -A v_system_disks    # [sdX]=disk_id
+declare -a v_system_disks    # (/dev/by-id/disk_id, ...)
 v_temp_volume_device=        # /dev/zdN
 
 c_default_bpool_tweaks="-o ashift=12"
@@ -89,7 +89,7 @@ This script needs to be run with admin permissions, from a Live CD.
 The procedure can be entirely automated via environment variables:
 
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
-- ZFS_SELECTED_DISKS         : base name of the devices to create the pool on (eg. `sda,sdc`)
+- ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
 - ZFS_ENCRYPT_RPOOL          : set 1 to encrypt the pool
 - ZFS_PASSPHRASE
 - ZFS_BPOOL_NAME
@@ -98,9 +98,6 @@ The procedure can be entirely automated via environment variables:
 - ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `'$c_default_rpool_tweaks'`)
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer number); set 0 for no swap
-
-Note that the pools are created using the disk ids, also when $ZFS_SELECTED_DISKS is set.
-
 
 When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `'$c_mount_dir'`; the requisites are:
 
@@ -157,26 +154,23 @@ function find_disks {
 
   declare -A removable_devices # [sdX]=1
 
+  # This may be redundant, due to `/dev/disk/by-id` prefixing removable devices with `usb`, however,
+  # until certain, this is kept.
+  #
   for device in /sys/block/sd*; do
     if [[ -e "$device" ]]; then
       (udevadm info --query=property --path="$device" | grep -q "^ID_BUS=usb") && removable_devices["$(basename "$device")"]=1
     fi
   done
 
-  for disk_id in /dev/disk/by-id/*; do
-    local device_symlink
-    local device_basename
+  while read -r disk_id; do
+    local block_device_basename
+    block_device_basename="$(basename "$(readlink "$disk_id")")"
 
-    device_symlink="$(readlink "$disk_id")"
-    device_basename="$(basename "$device_symlink")"
-
-    # Multiple entries can be present for each device; this is acceptables; only the last of each
-    # is retained.
-    #
-    if [[ $device_basename =~ ^(sd[a-z]+|nvme[0-9]n[0-9])$ ]] && [[ ! -v removable_devices["$device_basename"] ]]; then
-      v_system_disks["$device_basename"]=$disk_id
+    if [[ ! -v removable_devices["$block_device_basename"] ]]; then
+      v_system_disks+=("$disk_id")
     fi
-  done
+  done <<< "$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi)-.+' -not -regex '.+-part[0-9]+$' | sort)"
 
   print_variables v_system_disks
 }
@@ -184,16 +178,11 @@ function find_disks {
 function select_disks {
   print_step_info_header
 
-  local selected_devices
-
   if [[ "${ZFS_SELECTED_DISKS:-}" != "" ]]; then
-    selected_devices="${ZFS_SELECTED_DISKS//,/$'\n'}"
+    mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
   else
     local menu_entries_option=()
-    local sorted_device_names # sdX ...
     declare -A mounted_devices # [sdX]=1
-
-    sorted_device_names="$(echo "${!v_system_disks[@]}" | perl -ane 'print join(" ", sort(@F))')" # ugly :,-(
 
     for filesystem in $(df | tail -n +2 | awk '{print $1}'); do
       local mounted_device
@@ -202,11 +191,12 @@ function select_disks {
       [[ "$mounted_device" != "" ]] && mounted_devices["$mounted_device"]=1
     done
 
-    for device_name in $sorted_device_names; do
-      if [[ ! -v mounted_devices["$device_name"] ]]; then
-        menu_entries_option+=("$device_name")
-        menu_entries_option+=("${v_system_disks[$device_name]}")
-        menu_entries_option+=(OFF)
+    for disk_id in "${v_system_disks[@]}"; do
+      local block_device_basename
+      block_device_basename="$(basename "$(readlink "$disk_id")")"
+
+      if [[ ! -v mounted_devices["$block_device_basename"] ]]; then
+        menu_entries_option+=("$disk_id" "" OFF)
       fi
     done
 
@@ -214,14 +204,8 @@ function select_disks {
 
 Devices with mounted partitions are not displayed!
 "
-    selected_devices=$(
-      whiptail --checklist --separate-output "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3
-    )
+    mapfile -t v_selected_disks < <(whiptail --checklist --separate-output "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
   fi
-
-  while read -r device_name; do
-    v_selected_disks+=("/dev/disk/by-id/${v_system_disks[$device_name]}")
-  done <<< "$selected_devices"
 
   print_variables v_selected_disks
 }

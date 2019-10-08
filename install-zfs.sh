@@ -154,22 +154,14 @@ In order to stop the procedure, hit Esc twice during dialogs (excluding yes/no o
 function find_disks {
   print_step_info_header
 
-  declare -A removable_devices # [sdX]=1
-
-  # This may be redundant, due to `/dev/disk/by-id` prefixing removable devices with `usb`, however,
-  # until certain, this is kept.
-  #
-  for device in /sys/block/sd*; do
-    if [[ -e "$device" ]]; then
-      (udevadm info --query=property --path="$device" | grep -q "^ID_BUS=usb") && removable_devices["$(basename "$device")"]=1
-    fi
-  done
-
   while read -r disk_id; do
-    local block_device_basename
-    block_device_basename="$(basename "$(readlink "$disk_id")")"
+    local device_info
+    device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
 
-    if [[ ! -v removable_devices["$block_device_basename"] ]]; then
+    # The USB test may be redundant, due to `/dev/disk/by-id` prefixing removable devices with
+    # `usb`, however, until certain, this is kept.
+    #
+    if echo "$device_info" | grep -q '^ID_TYPE=disk$' && ! echo "$device_info" | grep -q '^ID_BUS=usb$'; then
       v_system_disks+=("$disk_id")
     fi
   done <<< "$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi)-.+' -not -regex '.+-part[0-9]+$' | sort)"
@@ -204,7 +196,7 @@ function select_disks {
 
     local dialog_message="Select the ZFS devices (multiple selections will be in mirror).
 
-Devices with mounted partitions are not displayed!
+Devices with mounted partitions, cdroms, and removable devices are not displayed!
 "
     mapfile -t v_selected_disks < <(whiptail --checklist --separate-output "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
   fi

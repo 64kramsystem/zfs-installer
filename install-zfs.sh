@@ -176,20 +176,15 @@ function select_disks {
     mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
   else
     local menu_entries_option=()
-    declare -A mounted_devices # [sdX]=1
+    local mounted_devices
 
-    for filesystem in $(df | tail -n +2 | awk '{print $1}'); do
-      local mounted_device
-      mounted_device="$(lsblk -no pkname "$filesystem" 2> /dev/null || true)"
-
-      [[ "$mounted_device" != "" ]] && mounted_devices["$mounted_device"]=1
-    done
+    mounted_devices="$(df | awk 'BEGIN {getline} {print $1}' | xargs -n 1 lsblk -no pkname 2> /dev/null | sort -u || true)"
 
     for disk_id in "${v_system_disks[@]}"; do
-      local block_device_basename
-      block_device_basename="$(basename "$(readlink "$disk_id")")"
+      local block_device_name
+      block_device_basename="$(basename "$(readlink -f "$disk_id")")"
 
-      if [[ ! -v mounted_devices["$block_device_basename"] ]]; then
+      if ! echo "$mounted_devices" | grep -q "^$block_device_basename\$"; then
         menu_entries_option+=("$disk_id" "" OFF)
       fi
     done

@@ -101,6 +101,8 @@ The procedure can be entirely automated via environment variables:
 - ZFS_SWAP_SIZE              : swap size (integer number); set 0 for no swap
 - ZFS_FREE_TAIL_SPACE        : leave free space at the end of each disk (integer number), for example, for a swap partition
 
+- ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL : (debug) set 1 to skip installing the ZFS package on the live system; speeds up installation on preset machines
+
 When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `'$c_mount_dir'`; the requisites are:
 
 1. the virtual filesystems must be mounted in `'$c_mount_dir'` (ie. `for vfs in proc sys dev; do mount --rbind /$vfs '$c_mount_dir'/$vfs; done`)
@@ -321,15 +323,17 @@ function ask_pool_tweaks {
 function install_zfs_module {
   print_step_info_header
 
-  echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+    echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
-  add-apt-repository --yes ppa:jonathonf/zfs
-  apt install --yes zfs-dkms
+    add-apt-repository --yes ppa:jonathonf/zfs
+    apt install --yes zfs-dkms
 
-  systemctl stop zfs-zed
-  modprobe -r zfs
-  modprobe zfs
-  systemctl start zfs-zed
+    systemctl stop zfs-zed
+    modprobe -r zfs
+    modprobe zfs
+    systemctl start zfs-zed
+  fi
 }
 
 function prepare_disks {

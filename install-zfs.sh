@@ -98,8 +98,8 @@ The procedure can be entirely automated via environment variables:
 - ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `'$c_default_bpool_tweaks'`)
 - ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `'$c_default_rpool_tweaks'`)
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
-- ZFS_SWAP_SIZE              : swap size (integer number); set 0 for no swap
-- ZFS_FREE_TAIL_SPACE        : leave free space at the end of each disk (integer number), for example, for a swap partition
+- ZFS_SWAP_SIZE              : swap size (integer); set 0 for no swap
+- ZFS_FREE_TAIL_SPACE        : leave free space at the end of each disk (integer), for example, for a swap partition
 
 - ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL : (debug) set 1 to skip installing the ZFS package on the live system; speeds up installation on preset machines
 

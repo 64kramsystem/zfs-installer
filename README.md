@@ -39,7 +39,7 @@ then follow the instructions.
 
 ### Unattended installations
 
-The program support unattended installation via environment variables. The program built-in help explains all the options:
+The program supports unattended installation, via environment variables. The program built-in help explains all the options:
 
 ```
 $ wget -qO- https://git.io/JelI5 | bash /dev/stdin --help
@@ -60,8 +60,8 @@ The procedure can be entirely automated via environment variables:
 - ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `-o ashift=12`)
 - ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD`)
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
-- ZFS_SWAP_SIZE              : swap size (integer number); set 0 for no swap
-- ZFS_FREE_TAIL_SPACE        : leave free space at the end of each disk (integer number), for example, for a swap partition
+- ZFS_SWAP_SIZE              : swap size (integer); set 0 for no swap
+- ZFS_FREE_TAIL_SPACE        : leave free space at the end of each disk (integer), for example, for a swap partition
 
 When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `/mnt`; the requisites are:
 
@@ -69,6 +69,8 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 2. internet must be accessible while chrooting in `/mnt` (ie. `echo nameserver 8.8.8.8 >> /mnt/etc/resolv.conf`)
 3. `/mnt` must be left in a dismountable state (e.g. no file locks, no swap etc.);
 ```
+
+Other options may be supported, and displayed in the current commandline help, so users are invited to take a look.
 
 ## Screenshots
 
@@ -86,9 +88,9 @@ For issues, also attach the file `/tmp/install-zfs.log`. It doesn't contain any 
 
 ## Credits
 
-The workflow of this program is based on the official ZFS wiki procedure, so many thanks to the team.
+The workflow of this program is based on the official ZFS wiki procedure, so, many thanks to the ZFS team.
 
-Many thanks to Gerard Beekmans for reaching out and giving useful feedback and help.
+Many thanks also to Gerard Beekmans for reaching out and giving useful feedback and help.
 
 As my other open source work and [technical writing](https://saveriomiroddi.github.io), this project is sponsored by [Ticketsolve](https://ticketsolve.com).
 

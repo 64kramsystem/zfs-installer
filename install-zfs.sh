@@ -469,6 +469,17 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   ubiquity --no-bootloader
 
   swapoff -a
+
+  # /target is not always unmounted; the reason is unclear. A possibility is that if there is an
+  # active swapfile under `/target` and ubiquity fails to unmount /target, it fails silently,
+  # leaving `/target` mounted.
+  # For this reason, if it's not mounted, we remount it.
+  #
+  # Note that we assume that the user created only one partition on the temp volume, as expected.
+  #
+  if ! mountpoint -q "$c_ubiquity_destination_mount"; then
+    mount "${v_temp_volume_device}p1" "$c_ubiquity_destination_mount"
+  fi
 }
 
 function sync_os_temp_installation_dir_to_rpool {

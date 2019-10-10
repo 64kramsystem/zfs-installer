@@ -192,7 +192,7 @@ function select_disks {
       block_device_basename="$(basename "$(readlink -f "$disk_id")")"
 
       if ! echo "$mounted_devices" | grep -q "^$block_device_basename\$"; then
-        menu_entries_option+=("$disk_id" "" OFF)
+        menu_entries_option+=("$disk_id" "($block_device_basename)" OFF)
       fi
     done
 

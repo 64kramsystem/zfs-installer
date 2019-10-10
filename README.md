@@ -1,3 +1,5 @@
+[![Build Status][BS IMG]](https://travis-ci.org/saveriomiroddi/zfs-installer)
+
 # zfs-installer
 
 ZFS installer is shell script program that fully prepares ZFS on a system, and allows an effortless installation of Ubuntu via the standard installer (or via any script).
@@ -89,3 +91,5 @@ The workflow of this program is based on the official ZFS wiki procedure, so man
 Many thanks to Gerard Beekmans for reaching out and giving useful feedback and help.
 
 As my other open source work and [technical writing](https://saveriomiroddi.github.io), this project is sponsored by [Ticketsolve](https://ticketsolve.com).
+
+[BS img]: https://travis-ci.org/saveriomiroddi/zfs-installer.svg?branch=master

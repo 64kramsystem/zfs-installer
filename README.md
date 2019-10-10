@@ -10,7 +10,7 @@ The program currently supports Ubuntu 18.04 (Bionic). It uses the widespread [jo
 
 EFI boot is required (any modern (2011+) system will do); legacy boot is currently not supported.
 
-RAID-1 (mirroring) is supported, with any arbitrary number of disks; both the boot and root pools are mirrored, however, the EFI partition is currently not functionally cloned.
+RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot and root pools are mirrored, and the EFI partition is cloned for each disk.
 
 It's fairly easy to extend the program to support at least other Debian-based operating systems (any Debian, older Ubuntu, etc.) - the project is (very) open to feature requests.
 

@@ -154,6 +154,11 @@ In order to stop the procedure, hit Esc twice during dialogs (excluding yes/no o
 function find_disks {
   print_step_info_header
 
+  # In some freaky cases, `/dev/disk/by-id` is not up to date, so we refresh. One case is after
+  # starting a VirtualBox VM that is a full clone of a suspended VM with snapshots.
+  #
+  udevadm trigger
+
   while read -r disk_id; do
     local device_info
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"

@@ -571,8 +571,8 @@ function clone_efi_partition {
   local selected_disk_i=2
 
   for selected_disk in "${v_selected_disks[@]:1}"; do
-    dd if="${v_selected_disks[0]}-part2" of="${selected_disk}-part2"
-    efibootmgr --create --disk "${selected_disk}" --part 2 --label "ubuntu-$selected_disk_i" --loader '\EFI\ubuntu\grubx64.efi'
+    dd if="${v_selected_disks[0]}-part1" of="${selected_disk}-part1"
+    efibootmgr --create --disk "${selected_disk}" --label "ubuntu-$selected_disk_i" --loader '\EFI\ubuntu\grubx64.efi'
     ((selected_disk_i += 1))
   done
 }

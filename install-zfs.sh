@@ -568,12 +568,9 @@ function install_and_configure_bootloader {
 function clone_efi_partition {
   print_step_info_header
 
-  local selected_disk_i=2
-
-  for selected_disk in "${v_selected_disks[@]:1}"; do
-    dd if="${v_selected_disks[0]}-part1" of="${selected_disk}-part1"
-    efibootmgr --create --disk "${selected_disk}" --label "ubuntu-$selected_disk_i" --loader '\EFI\ubuntu\grubx64.efi'
-    ((selected_disk_i += 1))
+  for ((i = 1; i < ${#v_selected_disks[@]}; i++)); do
+    dd if="${v_selected_disks[0]}-part1" of="${v_selected_disks[i]}-part1"
+    efibootmgr --create --disk "${v_selected_disks[i]}" --label "ubuntu-$((i + 1))" --loader '\EFI\ubuntu\grubx64.efi'
   done
 }
 

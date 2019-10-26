@@ -216,7 +216,7 @@ function ask_encryption {
   elif [[ "${ZFS_ENCRYPT_RPOOL:-}" != "0" ]]; then
     v_encrypt_rpool=1
   fi
-
+  set +x
   if [[ $v_encrypt_rpool == "1" ]]; then
     if [[ ${ZFS_PASSPHRASE:-} != "" ]]; then
       v_passphrase="$ZFS_PASSPHRASE"
@@ -232,8 +232,7 @@ function ask_encryption {
       done
     fi
   fi
-
-  print_variables v_passphrase
+  set -x
 }
 
 function ask_swap_size {
@@ -463,7 +462,7 @@ function install_operating_system {
 Proceed with the configuration as usual, then, at the partitioning stage:
 
 - check `Something Else` -> `Continue`
-- select `'"$v_temp_volume_device"'` -> `Change`
+- select `'"$v_temp_volume_device"p1'` -> `Change`
   - set `Use as:` to `Ext4`
   - check `Format the partition:`
   - set `Mount point` to `/` -> `OK`

@@ -761,12 +761,12 @@ ask_free_tail_space
 ask_pool_names
 ask_pool_tweaks
 
-install_host_zfs_module
+distro_dependent_invoke "install_host_zfs_module"
 prepare_disks
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
-  create_temp_volume
-  install_operating_system
+  distro_dependent_invoke "create_temp_volume"
+  distro_dependent_invoke "install_operating_system"
   sync_os_temp_installation_dir_to_rpool
   destroy_temp_volume
   prepare_jail
@@ -774,8 +774,8 @@ else
   custom_install_operating_system
 fi
 
-install_jail_zfs_packages
-install_and_configure_bootloader
+distro_dependent_invoke "install_jail_zfs_packages"
+distro_dependent_invoke "install_and_configure_bootloader"
 clone_efi_partition
 configure_boot_pool_import
 configure_remaining_settings

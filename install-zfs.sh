@@ -149,7 +149,7 @@ function check_prerequisites {
     echo "This Linux distribution ($v_linux_distribution) is not supported!"
     exit 1
   elif [[ ! $v_linux_version =~ $(echo "^${c_supported_linux_distributions["$v_linux_distribution"]}\\b") ]]; then
-    echo "This Linux distribution version ($v_linux_version) is supported; version supported: ${c_supported_linux_distributions["$v_linux_distribution"]}"
+    echo "This Linux distribution version ($v_linux_version) is not supported; version supported: ${c_supported_linux_distributions["$v_linux_distribution"]}"
     exit 1
   fi
 }

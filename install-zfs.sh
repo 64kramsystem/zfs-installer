@@ -4,8 +4,8 @@
 # Shellcheck issue descriptions:
 #
 # - SC2015: <condition> && <operation> || true
-# - SC2016: annoying warning about using single quoted strings with characters used for interpolation;
-# - SC2034: triggers a bug on the `-v` test (see https://git.io/Jenyu).
+# - SC2016: annoying warning about using single quoted strings with characters used for interpolation
+# - SC2034: triggers a bug on the `-v` test (see https://git.io/Jenyu)
 
 set -o errexit
 set -o pipefail

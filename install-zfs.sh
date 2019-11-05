@@ -128,6 +128,18 @@ function activate_debug {
   set -x
 }
 
+function print_preset_variables {
+  cat <<SHELL
+# Preset variables for rerun:
+
+ZFS_SELECTED_DISKS=$(printf "%s," "${v_selected_disks[@]}" | sed 's/.$//') \\
+ZFS_ENCRYPT_RPOOL=$v_encrypt_rpool ZFS_PASSPHRASE=$v_passphrase \\
+ZFS_BPOOL_NAME=$v_bpool_name ZFS_RPOOL_NAME=$v_rpool_name \\
+ZFS_BPOOL_TWEAKS="$v_bpool_tweaks" ZFS_RPOOL_TWEAKS="$v_rpool_tweaks" \\
+ZFS_SWAP_SIZE=$v_swap_size ZFS_FREE_TAIL_SPACE=$v_free_tail_space
+SHELL
+}
+
 function set_distribution_data {
   v_linux_distribution="$(lsb_release --id --short)"
   v_linux_version="$(lsb_release --release --short)"
@@ -687,6 +699,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 activate_debug
+trap print_preset_variables ERR
 set_distribution_data
 check_prerequisites
 display_intro_banner

@@ -32,8 +32,8 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19)
-declare -A c_linux_setups_zfs_0_8_support=([Ubuntu]=1 [LinuxMint]=1) # Avoid using the term
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19 [Debian]=10)
+declare -A c_linux_setups_zfs_0_8_support=([Ubuntu]=1 [LinuxMint]=1 [Debian]=0) # Avoid the term
                              # "distribution", which is somewhat misleading in this context.
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
@@ -386,6 +386,21 @@ function install_host_zfs_module {
   fi
 }
 
+function install_host_zfs_module_Debian {
+  print_step_info_header
+
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+    echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
+
+    echo "deb http://deb.debian.org/debian buster contrib" >> /etc/apt/sources.list
+    apt update
+
+    apt install --yes zfs-dkms
+
+    modprobe zfs
+  fi
+}
+
 function prepare_disks {
   print_step_info_header
 
@@ -512,6 +527,14 @@ function create_temp_volume {
   udevadm settle
 }
 
+# Differently from Ubuntu, the installer (Calamares) requires a filesystem to be ready.
+#
+function create_temp_volume_Debian {
+  create_temp_volume
+
+  mkfs.ext4 -F "$v_temp_volume_device"
+}
+
 function install_operating_system {
   print_step_info_header
 
@@ -546,6 +569,36 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
     mount "${v_temp_volume_device}p1" "$c_installed_os_data_mount_dir"
   fi
+}
+
+function install_operating_system_Debian {
+  print_step_info_header
+
+  local dialog_message='The Debian GUI installer will now be launched.
+
+Proceed with the configuration as usual, then, at the partitioning stage:
+
+- check `Manual partitioning` -> `Next`
+- set `Storage device` to `Unknown - 10.0 GB '"${v_temp_volume_device}"'`
+- click on `'"${v_temp_volume_device}"'` in the filesystems panel -> `Edit`
+  - set `Mount Point` to `/` -> `OK`
+- `Next`
+- follow through the installation (ignore the EFI partition warning)
+- at the end, uncheck `Restart now`, and click `Done`
+'
+
+  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+    whiptail --msgbox "$dialog_message" 30 100
+  fi
+
+  calamares
+
+  mkdir -p "$c_installed_os_data_mount_dir"
+
+  # Note how in Debian, for reasons currenly unclear, the mount fails if the partition is passed;
+  # it requires the device to be passed.
+  #
+  mount "${v_temp_volume_device}" "$c_installed_os_data_mount_dir"
 }
 
 function sync_os_temp_installation_dir_to_rpool {
@@ -588,6 +641,16 @@ function install_jail_zfs_packages {
   else
     chroot_execute "apt update"
   fi
+
+  chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
+  chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+}
+
+function install_jail_zfs_packages_Debian {
+  print_step_info_header
+
+  chroot_execute 'echo "deb http://deb.debian.org/debian buster contrib" >> /etc/apt/sources.list'
+  chroot_execute "apt update"
 
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
   chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
@@ -746,7 +809,7 @@ else
   custom_install_operating_system
 fi
 
-install_jail_zfs_packages
+distro_dependent_invoke "install_jail_zfs_packages"
 install_and_configure_bootloader
 clone_efi_partition
 configure_boot_pool_import

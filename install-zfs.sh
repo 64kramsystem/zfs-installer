@@ -33,6 +33,7 @@ c_mount_dir=/mnt
 declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19)
 declare -A c_linux_setups_zfs_0_8_support=([Ubuntu]=1 [LinuxMint]=1) # Avoid using the term
                              # "distribution", which is somewhat misleading in this context.
+c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 c_ubiquity_destination_mount=/target
 
 # HELPER FUNCTIONS #############################################################
@@ -484,7 +485,7 @@ function prepare_disks {
 }
 
 function create_temp_volume {
-  zfs create -V 10G "$v_rpool_name/os-install-temp"
+  zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
 
   # The volume may not be immediately available; for reference, "/dev/zvol/.../os-install-temp"
   # is a standard file, which turns into symlink once the volume is available. See #8.

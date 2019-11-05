@@ -36,7 +36,7 @@ declare -a v_system_disks    # (/dev/by-id/disk_id, ...); scope: find_disks -> s
 
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
-c_mount_dir=/mnt
+c_zfs_mount_dir=/mnt
 declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 c_ubiquity_destination_mount=/target
@@ -119,7 +119,7 @@ function print_variables {
 }
 
 function chroot_execute {
-  chroot $c_mount_dir bash -c "$1"
+  chroot $c_zfs_mount_dir bash -c "$1"
 }
 
 # PROCEDURE STEP FUNCTIONS #####################################################
@@ -148,11 +148,11 @@ The procedure can be entirely automated via environment variables:
 
 - ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL : (debug) set 1 to skip installing the ZFS package on the live system; speeds up installation on preset machines
 
-When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `'$c_mount_dir'`; the requisites are:
+When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `'$c_zfs_mount_dir'`; the requisites are:
 
-1. the virtual filesystems must be mounted in `'$c_mount_dir'` (ie. `for vfs in proc sys dev; do mount --rbind /$vfs '$c_mount_dir'/$vfs; done`)
-2. internet must be accessible while chrooting in `'$c_mount_dir'` (ie. `echo nameserver 8.8.8.8 >> '$c_mount_dir'/etc/resolv.conf`)
-3. `'$c_mount_dir'` must be left in a dismountable state (e.g. no file locks, no swap etc.);
+1. the virtual filesystems must be mounted in `'$c_zfs_mount_dir'` (ie. `for vfs in proc sys dev; do mount --rbind /$vfs '$c_zfs_mount_dir'/$vfs; done`)
+2. internet must be accessible while chrooting in `'$c_zfs_mount_dir'` (ie. `echo nameserver 8.8.8.8 >> '$c_zfs_mount_dir'/etc/resolv.conf`)
+3. `'$c_zfs_mount_dir'` must be left in a dismountable state (e.g. no file locks, no swap etc.);
 '
 
   echo "$help"
@@ -503,7 +503,7 @@ function prepare_disks {
   echo -n "$v_passphrase" | zpool create \
     "${encryption_options[@]}" \
     $v_rpool_tweaks \
-    -O devices=off -O mountpoint=/ -R "$c_mount_dir" -f \
+    -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
     "$v_rpool_name" $pools_mirror_option "${rpool_disks_partitions[@]}"
 
   # `-d` disable all the pool features (not used here);
@@ -511,7 +511,7 @@ function prepare_disks {
   # shellcheck disable=SC2086 # see previous command
   zpool create \
     $v_bpool_tweaks \
-    -O devices=off -O mountpoint=/boot -R "$c_mount_dir" -f \
+    -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
     "$v_bpool_name" $pools_mirror_option "${bpool_disks_partitions[@]}"
 
   # SWAP ###############################
@@ -582,7 +582,7 @@ function sync_os_temp_installation_dir_to_rpool {
   # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
   # ❤️ Perl ❤️
   #
-  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_ubiquity_destination_mount/" "$c_mount_dir" |
+  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_ubiquity_destination_mount/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
@@ -597,7 +597,7 @@ function prepare_jail {
   print_step_info_header
 
   for virtual_fs_dir in proc sys dev; do
-    mount --rbind "/$virtual_fs_dir" "$c_mount_dir/$virtual_fs_dir"
+    mount --rbind "/$virtual_fs_dir" "$c_zfs_mount_dir/$virtual_fs_dir"
   done
 
   chroot_execute 'echo "nameserver 8.8.8.8" >> /etc/resolv.conf'
@@ -701,7 +701,7 @@ function prepare_for_system_exit {
   print_step_info_header
 
   for virtual_fs_dir in dev sys proc; do
-    umount --recursive --force --lazy "$c_mount_dir/$virtual_fs_dir"
+    umount --recursive --force --lazy "$c_zfs_mount_dir/$virtual_fs_dir"
   done
 
   # In one case, a second unmount was required. In this contenxt, bind mounts are not safe, so,
@@ -713,7 +713,7 @@ function prepare_for_system_exit {
   SECONDS=0
 
   for virtual_fs_dir in dev sys proc; do
-    while mountpoint -q "$c_mount_dir/$virtual_fs_dir" && [[ $SECONDS -lt $max_unmount_wait ]]; do
+    while mountpoint -q "$c_zfs_mount_dir/$virtual_fs_dir" && [[ $SECONDS -lt $max_unmount_wait ]]; do
       sleep 0.5
       echo -n .
     done
@@ -722,9 +722,9 @@ function prepare_for_system_exit {
   echo
 
   for virtual_fs_dir in dev sys proc; do
-    if mountpoint -q "$c_mount_dir/$virtual_fs_dir"; then
-      echo "Re-issuing umount for $c_mount_dir/$virtual_fs_dir"
-      umount --recursive --force --lazy "$c_mount_dir/$virtual_fs_dir"
+    if mountpoint -q "$c_zfs_mount_dir/$virtual_fs_dir"; then
+      echo "Re-issuing umount for $c_zfs_mount_dir/$virtual_fs_dir"
+      umount --recursive --force --lazy "$c_zfs_mount_dir/$virtual_fs_dir"
     fi
   done
 

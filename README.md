@@ -37,7 +37,7 @@ The script is in "open beta"; it's been tested on different configurations, but 
 Start the live CD of a supported Linux distribution, then open a terminal and execute:
 
 ```sh
-wget -qO- https://git.io/JelI5 | sudo bash -
+GET https://git.io/JelI5 | sudo bash -
 ```
 
 then follow the instructions.

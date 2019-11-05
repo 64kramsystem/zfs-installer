@@ -30,11 +30,11 @@ v_temp_volume_device=        # /dev/zdN
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
+c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19)
 declare -A c_linux_setups_zfs_0_8_support=([Ubuntu]=1 [LinuxMint]=1) # Avoid using the term
                              # "distribution", which is somewhat misleading in this context.
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
-c_ubiquity_destination_mount=/target
 
 # HELPER FUNCTIONS #############################################################
 
@@ -542,8 +542,8 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   #
   # Note that we assume that the user created only one partition on the temp volume, as expected.
   #
-  if ! mountpoint -q "$c_ubiquity_destination_mount"; then
-    mount "${v_temp_volume_device}p1" "$c_ubiquity_destination_mount"
+  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
+    mount "${v_temp_volume_device}p1" "$c_installed_os_data_mount_dir"
   fi
 }
 
@@ -552,11 +552,11 @@ function sync_os_temp_installation_dir_to_rpool {
   # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
   # ❤️ Perl ❤️
   #
-  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_ubiquity_destination_mount/" "$c_zfs_mount_dir" |
+  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
-  umount "$c_ubiquity_destination_mount"
+  umount "$c_installed_os_data_mount_dir"
 }
 
 function destroy_temp_volume {

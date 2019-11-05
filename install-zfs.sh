@@ -24,8 +24,9 @@ v_rpool_tweaks=              # see defaults below for format
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
-declare -a v_system_disks    # (/dev/by-id/disk_id, ...)
 v_temp_volume_device=        # /dev/zdN
+
+declare -a v_system_disks    # (/dev/by-id/disk_id, ...) - temporary (find_disks -> select_disks
 
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"

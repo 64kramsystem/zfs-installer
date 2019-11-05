@@ -38,6 +38,16 @@ c_ubiquity_destination_mount=/target
 
 # HELPER FUNCTIONS #############################################################
 
+function distro_dependent_invoke {
+  local distro_specific_fx_name="$1_$v_linux_distribution"
+
+  if declare -f "$distro_specific_fx_name"; then
+    "$distro_specific_fx_name"
+  else
+    "$1"
+  fi
+}
+
 # shellcheck disable=SC2120 # allow parameters passing even if no calls pass any
 function print_step_info_header {
   echo -n "

@@ -37,6 +37,40 @@ c_ubiquity_destination_mount=/target
 
 # HELPER FUNCTIONS #############################################################
 
+# Chooses a function and invokes it depending on the O/S distribution.
+#
+# Example:
+#
+#   $ function install_jail_zfs_packages { :; }
+#   $ function install_jail_zfs_packages_Debian { :; }
+#   $ distro_dependent_invoke "install_jail_zfs_packages"
+#
+# If the distribution is `Debian`, the second will be invoked, otherwise, the
+# first.
+#
+# If the function is invoked with `--noforce` as second parameter, and there is
+# no matching function:
+#
+#   $ function update_zed_cache_Ubuntu { :; }
+#   $ distro_dependent_invoke "install_jail_zfs_packages" --noforce
+#
+# then nothing happens. Without `--noforce`, this invocation will cause an
+# error.
+#
+function distro_dependent_invoke {
+  local distro_specific_fx_name="$1_$v_linux_distribution"
+
+  if declare -f "$distro_specific_fx_name" > /dev/null; then
+    "$distro_specific_fx_name"
+  else
+    if ! declare -f "$1" > /dev/null && [[ "${2:-}" == "--noforce" ]]; then
+      : # do nothing
+    else
+      "$1"
+    fi
+  fi
+}
+
 # shellcheck disable=SC2120 # allow parameters passing even if no calls pass any
 function print_step_info_header {
   echo -n "

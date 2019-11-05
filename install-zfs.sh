@@ -15,6 +15,8 @@ set -o nounset
 
 v_bpool_name=
 v_bpool_tweaks=              # see defaults below for format
+v_linux_distribution=        # Debian, Ubuntu, ...
+v_linux_distribution_version=
 v_encrypt_rpool=             # 0=false, 1=true
 v_passphrase=
 v_rpool_name=
@@ -28,6 +30,7 @@ v_temp_volume_device=        # /dev/zdN
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_mount_dir=/mnt
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04)
 c_ubiquity_destination_mount=/target
 
 # HELPER FUNCTIONS #############################################################
@@ -123,9 +126,16 @@ function activate_debug {
   set -x
 }
 
+function set_distribution_data {
+  v_linux_distribution="$(lsb_release --id --short)"
+  v_linux_version="$(lsb_release --release --short)"
+}
+
 function check_prerequisites {
   print_step_info_header
 
+  # shellcheck disable=SC2116 # `=~ $(echo ...)` causes a warning; see https://git.io/Je2QP.
+  #
   if [[ ! -d /sys/firmware/efi ]]; then
     echo 'System firmware directory not found; make sure to boot in EFI mode!'
     exit 1
@@ -134,6 +144,12 @@ function check_prerequisites {
     exit 1
   elif [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" != "" && ! -x "$ZFS_OS_INSTALLATION_SCRIPT" ]]; then
     echo "The custom O/S installation script provided doesn't exist or is not executable!"
+    exit 1
+  elif [[ ! -v c_supported_linux_distributions["$v_linux_distribution"] ]]; then
+    echo "This Linux distribution ($v_linux_distribution) is not supported!"
+    exit 1
+  elif [[ ! $v_linux_version =~ $(echo "^${c_supported_linux_distributions["$v_linux_distribution"]}\\b") ]]; then
+    echo "This Linux distribution version ($v_linux_version) is supported; version supported: ${c_supported_linux_distributions["$v_linux_distribution"]}"
     exit 1
   fi
 }
@@ -662,6 +678,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 activate_debug
+set_distribution_data
 check_prerequisites
 display_intro_banner
 find_disks

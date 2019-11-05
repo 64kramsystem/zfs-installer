@@ -34,10 +34,10 @@ The script is in "open beta"; it's been tested on different configurations, but 
 
 ## Instructions
 
-Start an Ubuntu 18.04 (any distro) live CD, then open a terminal and execute:
+Start the live CD of a supported Linux distribution, then open a terminal and execute:
 
 ```sh
-wget -qO- https://git.io/JelI5 | sudo bash -
+GET https://git.io/JelI5 | sudo bash -
 ```
 
 then follow the instructions.

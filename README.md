@@ -6,7 +6,12 @@ ZFS installer is shell script program that fully prepares ZFS on a system, and a
 
 ## Requirements and functionality
 
-The program currently supports Ubuntu 18.04 (Bionic). It uses the widespread [jonathonf/zfs PPA](https://launchpad.net/~jonathonf/+archive/ubuntu/zfs) for installing the latest ZFS version (0.8.x), which supports native encryption and trimming (among the other improvements over 0.7).
+The program currently supports:
+
+- Ubuntu 18.04.x (Bionic);
+- Linux Mint 19.x.
+
+It uses the widespread [jonathonf/zfs PPA](https://launchpad.net/~jonathonf/+archive/ubuntu/zfs) for installing the latest ZFS version (0.8.x), which supports native encryption and trimming (among the other improvements over 0.7).
 
 EFI boot is required (any modern (2011+) system will do); legacy boot is currently not supported.
 

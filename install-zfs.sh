@@ -30,7 +30,7 @@ v_temp_volume_device=        # /dev/zdN
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_mount_dir=/mnt
-declare -A c_supported_linux_distributions=([Ubuntu]=18.04)
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19)
 c_ubiquity_destination_mount=/target
 
 # HELPER FUNCTIONS #############################################################

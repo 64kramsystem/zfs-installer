@@ -368,7 +368,7 @@ function ask_pool_tweaks {
   print_variables v_bpool_tweaks v_rpool_tweaks
 }
 
-function install_zfs_module {
+function install_host_zfs_module {
   print_step_info_header
 
   if [[ "${c_linux_setups_zfs_0_8_support["$v_linux_distribution"]}" == "1" ]]; then
@@ -580,7 +580,7 @@ function custom_install_operating_system {
   sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
-function install_zfs_0.8_packages {
+function install_jail_zfs_packages {
   print_step_info_header
 
   if [[ "${c_linux_setups_zfs_0_8_support["$v_linux_distribution"]}" == "1" ]]; then
@@ -733,7 +733,7 @@ ask_free_tail_space
 ask_pool_names
 ask_pool_tweaks
 
-distro_dependent_invoke "install_zfs_module"
+distro_dependent_invoke "install_host_zfs_module"
 prepare_disks
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
@@ -746,7 +746,7 @@ else
   custom_install_operating_system
 fi
 
-install_zfs_0.8_packages
+install_jail_zfs_packages
 install_and_configure_bootloader
 clone_efi_partition
 configure_boot_pool_import

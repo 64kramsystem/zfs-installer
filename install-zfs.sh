@@ -752,5 +752,9 @@ clone_efi_partition
 configure_boot_pool_import
 configure_remaining_settings
 
+# DEBUG
+echo "Press enter to proceed to the chrooted env dismount..."
+read -rsn1
+
 prepare_for_system_exit
 display_exit_banner

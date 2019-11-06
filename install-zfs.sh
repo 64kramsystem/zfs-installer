@@ -365,6 +365,13 @@ function install_host_zfs_module {
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
     add-apt-repository --yes ppa:jonathonf/zfs
+
+    # Required only on LinuxMint, which doesn't update the apt data when invoking `add-apt-repository`.
+    # With the current design, it's arguably preferrable to introduce a redundant operation (for
+    # Ubuntu), rather than adding an almost entirely duplicated function.
+    #
+    apt update
+
     apt install --yes zfs-dkms
 
     systemctl stop zfs-zed
@@ -570,6 +577,11 @@ function install_jail_zfs_packages {
   print_step_info_header
 
   chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
+
+  # See install_host_zfs_module() comment.
+  #
+  chroot_execute "apt update"
+
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
   chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
 }

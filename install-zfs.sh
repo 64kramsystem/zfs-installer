@@ -371,18 +371,16 @@ function ask_pool_tweaks {
 function install_host_zfs_module {
   print_step_info_header
 
-  if [[ "${c_linux_setups_zfs_0_8_support["$v_linux_distribution"]}" == "1" ]]; then
-    if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
-      echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+    echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
-      add-apt-repository --yes ppa:jonathonf/zfs
-      apt install --yes zfs-dkms
+    add-apt-repository --yes ppa:jonathonf/zfs
+    apt install --yes zfs-dkms
 
-      systemctl stop zfs-zed
-      modprobe -r zfs
-      modprobe zfs
-      systemctl start zfs-zed
-    fi
+    systemctl stop zfs-zed
+    modprobe -r zfs
+    modprobe zfs
+    systemctl start zfs-zed
   fi
 }
 
@@ -636,11 +634,7 @@ function custom_install_operating_system {
 function install_jail_zfs_packages {
   print_step_info_header
 
-  if [[ "${c_linux_setups_zfs_0_8_support["$v_linux_distribution"]}" == "1" ]]; then
-    chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
-  else
-    chroot_execute "apt update"
-  fi
+  chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
 
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
   chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"

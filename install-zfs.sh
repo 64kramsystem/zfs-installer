@@ -24,8 +24,9 @@ v_rpool_tweaks=              # see defaults below for format
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
-declare -a v_system_disks    # (/dev/by-id/disk_id, ...)
 v_temp_volume_device=        # /dev/zdN
+
+declare -a v_system_disks    # (/dev/by-id/disk_id, ...) - temporary (find_disks -> select_disks
 
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
@@ -357,13 +358,20 @@ function ask_pool_tweaks {
   print_variables v_bpool_tweaks v_rpool_tweaks
 }
 
-function install_zfs_module {
+function install_host_zfs_module {
   print_step_info_header
 
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
     add-apt-repository --yes ppa:jonathonf/zfs
+
+    # Required only on LinuxMint, which doesn't update the apt data when invoking `add-apt-repository`.
+    # With the current design, it's arguably preferrable to introduce a redundant operation (for
+    # Ubuntu), rather than adding an almost entirely duplicated function.
+    #
+    apt update
+
     apt install --yes zfs-dkms
 
     systemctl stop zfs-zed
@@ -565,10 +573,15 @@ function custom_install_operating_system {
   sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
-function install_zfs_0.8_packages {
+function install_jail_zfs_packages {
   print_step_info_header
 
   chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
+
+  # See install_host_zfs_module() comment.
+  #
+  chroot_execute "apt update"
+
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
   chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
 }
@@ -713,7 +726,7 @@ ask_free_tail_space
 ask_pool_names
 ask_pool_tweaks
 
-install_zfs_module
+install_host_zfs_module
 prepare_disks
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
@@ -726,7 +739,7 @@ else
   custom_install_operating_system
 fi
 
-install_zfs_0.8_packages
+install_jail_zfs_packages
 install_and_configure_bootloader
 clone_efi_partition
 configure_boot_pool_import

@@ -32,8 +32,6 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_mount_dir=/mnt
 declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19)
-declare -A c_linux_setups_zfs_0_8_support=([Ubuntu]=1 [LinuxMint]=1) # Avoid using the term
-                             # "distribution", which is somewhat misleading in this context.
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 c_ubiquity_destination_mount=/target
 
@@ -167,9 +165,6 @@ function check_prerequisites {
   elif [[ ! $v_linux_version =~ $(echo "^${c_supported_linux_distributions["$v_linux_distribution"]}\\b") ]]; then
     echo "This Linux distribution version ($v_linux_version) is not supported; version supported: ${c_supported_linux_distributions["$v_linux_distribution"]}"
     exit 1
-  elif [[ "${c_linux_setups_zfs_0_8_support["$v_linux_distribution"]}" != "1" && "${ZFS_ENCRYPT_RPOOL:-}" != "" ]]; then
-    echo "This Linux setup doesn't support native encryption!"
-    exit 1
   fi
 }
 
@@ -243,10 +238,6 @@ Devices with mounted partitions, cdroms, and removable devices are not displayed
 
 function ask_encryption {
   print_step_info_header
-
-  if [[ "${c_linux_setups_zfs_0_8_support["$v_linux_distribution"]}" != "1" ]]; then
-    return
-  fi
 
   if [[ "${ZFS_ENCRYPT_RPOOL:-}" == "" ]]; then
     if whiptail --yesno 'Do you want to encrypt the root pool?' 30 100; then

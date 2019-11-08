@@ -13,6 +13,8 @@ set -o nounset
 
 # VARIABLES/CONSTANTS ##########################################################
 
+# Variables set (indirectly) by the user
+
 v_bpool_name=
 v_bpool_tweaks=              # see defaults below for format
 v_linux_distribution=        # Debian, Ubuntu, ...
@@ -24,18 +26,56 @@ v_rpool_tweaks=              # see defaults below for format
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
-v_temp_volume_device=        # /dev/zdN
 
-declare -a v_system_disks    # (/dev/by-id/disk_id, ...) - temporary (find_disks -> select_disks
+# Variables set during execution
+
+v_temp_volume_device=        # /dev/zdN; scope: create_temp_volume -> install_operating_system
+declare -a v_system_disks    # (/dev/by-id/disk_id, ...); scope: find_disks -> select_disk
+
+# Constants
 
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
-c_mount_dir=/mnt
+c_zfs_mount_dir=/mnt
+c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
-c_ubiquity_destination_mount=/target
 
 # HELPER FUNCTIONS #############################################################
+
+# Chooses a function and invokes it depending on the O/S distribution.
+#
+# Example:
+#
+#   $ function install_jail_zfs_packages { :; }
+#   $ function install_jail_zfs_packages_Debian { :; }
+#   $ distro_dependent_invoke "install_jail_zfs_packages"
+#
+# If the distribution is `Debian`, the second will be invoked, otherwise, the
+# first.
+#
+# If the function is invoked with `--noforce` as second parameter, and there is
+# no matching function:
+#
+#   $ function update_zed_cache_Ubuntu { :; }
+#   $ distro_dependent_invoke "install_jail_zfs_packages" --noforce
+#
+# then nothing happens. Without `--noforce`, this invocation will cause an
+# error.
+#
+function distro_dependent_invoke {
+  local distro_specific_fx_name="$1_$v_linux_distribution"
+
+  if declare -f "$distro_specific_fx_name" > /dev/null; then
+    "$distro_specific_fx_name"
+  else
+    if ! declare -f "$1" > /dev/null && [[ "${2:-}" == "--noforce" ]]; then
+      : # do nothing
+    else
+      "$1"
+    fi
+  fi
+}
 
 # shellcheck disable=SC2120 # allow parameters passing even if no calls pass any
 function print_step_info_header {
@@ -79,7 +119,7 @@ function print_variables {
 }
 
 function chroot_execute {
-  chroot $c_mount_dir bash -c "$1"
+  chroot $c_zfs_mount_dir bash -c "$1"
 }
 
 # PROCEDURE STEP FUNCTIONS #####################################################
@@ -108,11 +148,11 @@ The procedure can be entirely automated via environment variables:
 
 - ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL : (debug) set 1 to skip installing the ZFS package on the live system; speeds up installation on preset machines
 
-When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `'$c_mount_dir'`; the requisites are:
+When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `'$c_zfs_mount_dir'`; the requisites are:
 
-1. the virtual filesystems must be mounted in `'$c_mount_dir'` (ie. `for vfs in proc sys dev; do mount --rbind /$vfs '$c_mount_dir'/$vfs; done`)
-2. internet must be accessible while chrooting in `'$c_mount_dir'` (ie. `echo nameserver 8.8.8.8 >> '$c_mount_dir'/etc/resolv.conf`)
-3. `'$c_mount_dir'` must be left in a dismountable state (e.g. no file locks, no swap etc.);
+1. the virtual filesystems must be mounted in `'$c_zfs_mount_dir'` (ie. `for vfs in proc sys dev; do mount --rbind /$vfs '$c_zfs_mount_dir'/$vfs; done`)
+2. internet must be accessible while chrooting in `'$c_zfs_mount_dir'` (ie. `echo nameserver 8.8.8.8 >> '$c_zfs_mount_dir'/etc/resolv.conf`)
+3. `'$c_zfs_mount_dir'` must be left in a dismountable state (e.g. no file locks, no swap etc.);
 '
 
   echo "$help"
@@ -463,7 +503,7 @@ function prepare_disks {
   echo -n "$v_passphrase" | zpool create \
     "${encryption_options[@]}" \
     $v_rpool_tweaks \
-    -O devices=off -O mountpoint=/ -R "$c_mount_dir" -f \
+    -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
     "$v_rpool_name" $pools_mirror_option "${rpool_disks_partitions[@]}"
 
   # `-d` disable all the pool features (not used here);
@@ -471,7 +511,7 @@ function prepare_disks {
   # shellcheck disable=SC2086 # see previous command
   zpool create \
     $v_bpool_tweaks \
-    -O devices=off -O mountpoint=/boot -R "$c_mount_dir" -f \
+    -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
     "$v_bpool_name" $pools_mirror_option "${bpool_disks_partitions[@]}"
 
   # SWAP ###############################
@@ -497,6 +537,8 @@ function create_temp_volume {
   v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
 
   sgdisk -n1:0:0 -t1:8300 "$v_temp_volume_device"
+
+  udevadm settle
 }
 
 function install_operating_system {
@@ -530,8 +572,8 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   #
   # Note that we assume that the user created only one partition on the temp volume, as expected.
   #
-  if ! mountpoint -q "$c_ubiquity_destination_mount"; then
-    mount "${v_temp_volume_device}p1" "$c_ubiquity_destination_mount"
+  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
+    mount "${v_temp_volume_device}p1" "$c_installed_os_data_mount_dir"
   fi
 }
 
@@ -540,11 +582,11 @@ function sync_os_temp_installation_dir_to_rpool {
   # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
   # ❤️ Perl ❤️
   #
-  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_ubiquity_destination_mount/" "$c_mount_dir" |
+  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
-  umount "$c_ubiquity_destination_mount"
+  umount "$c_installed_os_data_mount_dir"
 }
 
 function destroy_temp_volume {
@@ -555,7 +597,7 @@ function prepare_jail {
   print_step_info_header
 
   for virtual_fs_dir in proc sys dev; do
-    mount --rbind "/$virtual_fs_dir" "$c_mount_dir/$virtual_fs_dir"
+    mount --rbind "/$virtual_fs_dir" "$c_zfs_mount_dir/$virtual_fs_dir"
   done
 
   chroot_execute 'echo "nameserver 8.8.8.8" >> /etc/resolv.conf'
@@ -592,6 +634,9 @@ function install_and_configure_bootloader {
   chroot_execute "grub-install"
 
   chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /'    /etc/default/grub"
+
+  # Silence warning during the grub probe (source: https://git.io/JenXF).
+  #
   chroot_execute "echo 'GRUB_DISABLE_OS_PROBER=true'                                    >> /etc/default/grub"
 
   # Simplify debugging, but most importantly, disable the boot graphical interface: text mode is
@@ -659,7 +704,7 @@ function prepare_for_system_exit {
   print_step_info_header
 
   for virtual_fs_dir in dev sys proc; do
-    umount --recursive --force --lazy "$c_mount_dir/$virtual_fs_dir"
+    umount --recursive --force --lazy "$c_zfs_mount_dir/$virtual_fs_dir"
   done
 
   # In one case, a second unmount was required. In this contenxt, bind mounts are not safe, so,
@@ -671,7 +716,7 @@ function prepare_for_system_exit {
   SECONDS=0
 
   for virtual_fs_dir in dev sys proc; do
-    while mountpoint -q "$c_mount_dir/$virtual_fs_dir" && [[ $SECONDS -lt $max_unmount_wait ]]; do
+    while mountpoint -q "$c_zfs_mount_dir/$virtual_fs_dir" && [[ $SECONDS -lt $max_unmount_wait ]]; do
       sleep 0.5
       echo -n .
     done
@@ -680,9 +725,9 @@ function prepare_for_system_exit {
   echo
 
   for virtual_fs_dir in dev sys proc; do
-    if mountpoint -q "$c_mount_dir/$virtual_fs_dir"; then
-      echo "Re-issuing umount for $c_mount_dir/$virtual_fs_dir"
-      umount --recursive --force --lazy "$c_mount_dir/$virtual_fs_dir"
+    if mountpoint -q "$c_zfs_mount_dir/$virtual_fs_dir"; then
+      echo "Re-issuing umount for $c_zfs_mount_dir/$virtual_fs_dir"
+      umount --recursive --force --lazy "$c_zfs_mount_dir/$virtual_fs_dir"
     fi
   done
 
@@ -721,12 +766,12 @@ ask_free_tail_space
 ask_pool_names
 ask_pool_tweaks
 
-install_host_zfs_module
+distro_dependent_invoke "install_host_zfs_module"
 prepare_disks
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
-  create_temp_volume
-  install_operating_system
+  distro_dependent_invoke "create_temp_volume"
+  distro_dependent_invoke "install_operating_system"
   sync_os_temp_installation_dir_to_rpool
   destroy_temp_volume
   prepare_jail
@@ -734,8 +779,8 @@ else
   custom_install_operating_system
 fi
 
-install_jail_zfs_packages
-install_and_configure_bootloader
+distro_dependent_invoke "install_jail_zfs_packages"
+distro_dependent_invoke "install_and_configure_bootloader"
 clone_efi_partition
 configure_boot_pool_import
 configure_remaining_settings

@@ -2,29 +2,30 @@
 
 # zfs-installer
 
-ZFS installer is shell script program that fully prepares ZFS on a system, and allows an effortless installation of Ubuntu via the standard installer (or via any script).
+ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
 
 ## Requirements and functionality
 
 The program currently supports:
 
 - Ubuntu 18.04.x (Bionic);
-- Linux Mint 19.x.
+- Linux Mint 19.x;
+- Debian 10.1.
 
-It uses the widespread [jonathonf/zfs PPA](https://launchpad.net/~jonathonf/+archive/ubuntu/zfs) for installing the latest ZFS version (0.8.x), which supports native encryption and trimming (among the other improvements over 0.7).
+The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
 
 EFI boot is required (any modern (2011+) system will do); legacy boot is currently not supported.
 
 RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot and root pools are mirrored, and the EFI partition is cloned for each disk.
 
-It's fairly easy to extend the program to support at least other Debian-based operating systems (any Debian, older Ubuntu, etc.) - the project is (very) open to feature requests.
+It's fairly easy to extend the program to support other Debian-based operating systems (any Debian, older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
 
 ## Advantages over the Ubuntu 19.10 built-in installer
 
-On October 17th, Canonical will release Ubuntu 19.10, with an experimental ZFS installer. The advantages of this project over the 19.10 installer are:
+Canonical released Ubuntu 19.10, with an experimental ZFS installer. The advantages of this project over the 19.10 installer are:
 
 1. on production systems, it's undesirable to use a non-LTS version;
-2. the experimental Ubuntu installer is unconfigurable, and supports a very simple configuration.
+2. the experimental Ubuntu installer is unconfigurable; it generates a fixed setup.
 
 additionally, as explained in the previous section, the script can be easily adapted for other operating systems.
 
@@ -40,7 +41,7 @@ Start the live CD of a supported Linux distribution, then open a terminal and ex
 GET https://git.io/JelI5 | sudo bash -
 ```
 
-then follow the instructions.
+then follow the instructions; halfway through the procedure, the GUI installer of the O/S will be launched.
 
 ### Unattended installations
 

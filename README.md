@@ -2,7 +2,7 @@
 
 # zfs-installer
 
-ZFS installer is shell script program that fully prepares ZFS on a system, and allows an effortless installation of Ubuntu via the standard installer (or via any script).
+ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of Ubuntu via the standard installer (or via any script).
 
 ## Requirements and functionality
 

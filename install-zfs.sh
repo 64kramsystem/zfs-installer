@@ -13,6 +13,8 @@ set -o nounset
 
 # VARIABLES/CONSTANTS ##########################################################
 
+# Variables set (indirectly) by the user
+
 v_bpool_name=
 v_bpool_tweaks=              # see defaults below for format
 v_linux_distribution=        # Debian, Ubuntu, ...
@@ -24,9 +26,13 @@ v_rpool_tweaks=              # see defaults below for format
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
-v_temp_volume_device=        # /dev/zdN
 
-declare -a v_system_disks    # (/dev/by-id/disk_id, ...) - temporary (find_disks -> select_disks
+# Variables set during execution
+
+v_temp_volume_device=        # /dev/zdN; scope: create_temp_volume -> install_operating_system
+declare -a v_system_disks    # (/dev/by-id/disk_id, ...); scope: find_disks -> select_disk
+
+# Constants
 
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"

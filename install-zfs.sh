@@ -21,6 +21,7 @@ v_linux_distribution=        # Debian, Ubuntu, ...
 v_linux_distribution_version=
 v_encrypt_rpool=             # 0=false, 1=true
 v_passphrase=
+v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_tweaks=              # see defaults below for format
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
@@ -38,7 +39,7 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19)
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19 [Debian]=10)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 # HELPER FUNCTIONS #############################################################
@@ -138,6 +139,7 @@ The procedure can be entirely automated via environment variables:
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
 - ZFS_ENCRYPT_RPOOL          : set 1 to encrypt the pool
 - ZFS_PASSPHRASE
+- ZFS_DEBIAN_ROOT_PASSWORD
 - ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
 - ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `'$c_default_bpool_tweaks'`)
@@ -274,6 +276,26 @@ Devices with mounted partitions, cdroms, and removable devices are not displayed
   fi
 
   print_variables v_selected_disks
+}
+
+function ask_root_password_Debian {
+  print_step_info_header
+
+  set +x
+  if [[ ${ZFS_DEBIAN_ROOT_PASSWORD:-} != "" ]]; then
+    v_root_password="$ZFS_DEBIAN_ROOT_PASSWORD"
+  else
+    local password_invalid_message=
+    local password_repeat=-
+
+    while [[ "$v_root_password" != "$password_repeat" || "$v_root_password" == "" ]]; do
+      v_root_password=$(whiptail --passwordbox "${password_invalid_message}Please enter the root account password (can't be empty):" 30 100 3>&1 1>&2 2>&3)
+      password_repeat=$(whiptail --passwordbox "Please repeat the password:" 30 100 3>&1 1>&2 2>&3)
+
+      password_invalid_message="Passphrase empty, or not matching! "
+    done
+  fi
+  set -x
 }
 
 function ask_encryption {
@@ -415,6 +437,22 @@ function install_host_zfs_module {
   fi
 }
 
+function install_host_zfs_module_Debian {
+  print_step_info_header
+
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+    echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
+
+    echo "deb http://deb.debian.org/debian buster contrib" >> /etc/apt/sources.list
+    echo "deb http://deb.debian.org/debian buster-backports main contrib" >> /etc/apt/sources.list
+    apt update
+
+    apt install --yes -t buster-backports zfs-dkms
+
+    modprobe zfs
+  fi
+}
+
 function prepare_disks {
   print_step_info_header
 
@@ -541,6 +579,14 @@ function create_temp_volume {
   udevadm settle
 }
 
+# Differently from Ubuntu, the installer (Calamares) requires a filesystem to be ready.
+#
+function create_temp_volume_Debian {
+  create_temp_volume
+
+  mkfs.ext4 -F "$v_temp_volume_device"
+}
+
 function install_operating_system {
   print_step_info_header
 
@@ -575,6 +621,47 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
     mount "${v_temp_volume_device}p1" "$c_installed_os_data_mount_dir"
   fi
+}
+
+function install_operating_system_Debian {
+  print_step_info_header
+
+  local dialog_message='The Debian GUI installer will now be launched.
+
+Proceed with the configuration as usual, then, at the partitioning stage:
+
+- check `Manual partitioning` -> `Next`
+- set `Storage device` to `Unknown - 10.0 GB '"${v_temp_volume_device}"'`
+- click on `'"${v_temp_volume_device}"'` in the filesystems panel -> `Edit`
+  - set `Mount Point` to `/` -> `OK`
+- `Next`
+- follow through the installation (ignore the EFI partition warning)
+- at the end, uncheck `Restart now`, and click `Done`
+'
+
+  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+    whiptail --msgbox "$dialog_message" 30 100
+  fi
+
+  calamares
+
+  mkdir -p "$c_installed_os_data_mount_dir"
+
+  # Note how in Debian, for reasons currenly unclear, the mount fails if the partition is passed;
+  # it requires the device to be passed.
+  #
+  mount "${v_temp_volume_device}" "$c_installed_os_data_mount_dir"
+
+  chroot_execute "echo root:$(printf "%q" "$v_root_password") | chpasswd"
+
+  # The installer doesn't set the network interfaces, so, for convenience, we do it.
+  #
+  for interface in $(ip addr show | perl -lne '/^\d+: (?!lo:)(\w+)/ && print $1' ); do
+    cat > "$c_installed_os_data_mount_dir/etc/network/interfaces.d/$interface" <<CONF
+  auto $interface
+  iface $interface inet dhcp
+CONF
+  done
 }
 
 function sync_os_temp_installation_dir_to_rpool {
@@ -623,6 +710,27 @@ function install_jail_zfs_packages {
   chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
 }
 
+function install_jail_zfs_packages_Debian {
+  print_step_info_header
+
+  chroot_execute 'echo "deb http://deb.debian.org/debian buster main contrib"     >> /etc/apt/sources.list'
+  chroot_execute 'echo "deb-src http://deb.debian.org/debian buster main contrib" >> /etc/apt/sources.list'
+
+  chroot_execute 'echo "deb http://deb.debian.org/debian buster-backports main contrib"     >> /etc/apt/sources.list.d/buster-backports.list'
+  chroot_execute 'echo "deb-src http://deb.debian.org/debian buster-backports main contrib" >> /etc/apt/sources.list.d/buster-backports.list'
+
+  chroot_execute 'cat > /etc/apt/preferences.d/90_zfs <<APT
+Package: libnvpair1linux libuutil1linux libzfs2linux libzpool2linux zfs-dkms zfs-initramfs zfs-test zfsutils-linux zfsutils-linux-dev zfs-zed
+Pin: release n=buster-backports
+Pin-Priority: 990
+APT'
+
+  chroot_execute "apt update"
+
+  chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
+  chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+}
+
 function install_and_configure_bootloader {
   print_step_info_header
 
@@ -660,6 +768,25 @@ function install_and_configure_bootloader {
   chroot_execute "umount /boot/efi"
 }
 
+function install_and_configure_bootloader_Debian {
+  print_step_info_header
+
+  chroot_execute "echo PARTUUID=$(blkid -s PARTUUID -o value "${v_selected_disks[0]}-part1") /boot/efi vfat nofail,x-systemd.device-timeout=1 0 1 > /etc/fstab"
+
+  chroot_execute "mkdir -p /boot/efi"
+  chroot_execute "mount /boot/efi"
+
+  chroot_execute "grub-install"
+
+  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /' /etc/default/grub"
+  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)quiet/\$1/'             /etc/default/grub"
+  chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                         /etc/default/grub"
+
+  chroot_execute "update-grub"
+
+  chroot_execute "umount /boot/efi"
+}
+
 function clone_efi_partition {
   print_step_info_header
 
@@ -691,6 +818,19 @@ UNIT"
 
   chroot_execute "zfs set mountpoint=legacy $v_bpool_name"
   chroot_execute "echo $v_bpool_name /boot zfs nodev,relatime,x-systemd.requires=zfs-import-$v_bpool_name.service 0 0 >> /etc/fstab"
+}
+
+function update_zed_cache_Debian {
+  chroot_execute "mkdir /etc/zfs/zfs-list.cache"
+  chroot_execute "touch /etc/zfs/zfs-list.cache/$v_rpool_name"
+  chroot_execute "ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
+
+  chroot_execute "zed -F &"
+  chroot_execute "[[ ! -s /etc/zfs/zfs-list.cache/$v_rpool_name ]] && zfs set canmount=noauto $v_rpool_name || true"
+  chroot_execute "[[ ! -s /etc/zfs/zfs-list.cache/$v_rpool_name ]] && false"
+  chroot_execute "pkill zed"
+
+  chroot_execute "sed -Ei 's|$c_installed_os_data_mount_dir/?|/|' /etc/zfs/zfs-list.cache/$v_rpool_name"
 }
 
 function configure_remaining_settings {
@@ -760,6 +900,7 @@ display_intro_banner
 find_disks
 
 select_disks
+distro_dependent_invoke "ask_root_password" --noforce
 ask_encryption
 ask_swap_size
 ask_free_tail_space
@@ -771,7 +912,10 @@ prepare_disks
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
   distro_dependent_invoke "create_temp_volume"
+
+  # Includes the O/S extra configuration, if necessary (network, root pwd, etc.)
   distro_dependent_invoke "install_operating_system"
+
   sync_os_temp_installation_dir_to_rpool
   destroy_temp_volume
   prepare_jail
@@ -783,6 +927,7 @@ distro_dependent_invoke "install_jail_zfs_packages"
 distro_dependent_invoke "install_and_configure_bootloader"
 clone_efi_partition
 configure_boot_pool_import
+distro_dependent_invoke "update_zed_cache" --noforce
 configure_remaining_settings
 
 prepare_for_system_exit

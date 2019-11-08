@@ -634,6 +634,9 @@ function install_and_configure_bootloader {
   chroot_execute "grub-install"
 
   chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /'    /etc/default/grub"
+
+  # Silence warning during the grub probe (source: https://git.io/JenXF).
+  #
   chroot_execute "echo 'GRUB_DISABLE_OS_PROBER=true'                                    >> /etc/default/grub"
 
   # Simplify debugging, but most importantly, disable the boot graphical interface: text mode is

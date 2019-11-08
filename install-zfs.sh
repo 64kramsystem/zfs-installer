@@ -363,7 +363,10 @@ function install_host_zfs_module {
     #
     apt update
 
-    apt install --yes zfs-dkms
+    # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
+    # Module compilation log: `/var/lib/dkms/zfs/0.8.2/build/make.log` (adjust according to version).
+    #
+    apt install --yes libelf-dev zfs-dkms
 
     systemctl stop zfs-zed
     modprobe -r zfs
@@ -564,17 +567,18 @@ function custom_install_operating_system {
   sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
+# See install_host_zfs_module() for some comments.
+#
 function install_jail_zfs_packages {
   print_step_info_header
 
   chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
 
-  # See install_host_zfs_module() comment.
-  #
   chroot_execute "apt update"
 
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
-  chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+
+  chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
 }
 
 function install_and_configure_bootloader {

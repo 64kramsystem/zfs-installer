@@ -9,9 +9,10 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 The program currently supports:
 
 - Ubuntu 18.04.x (Bionic);
-- Linux Mint 19.x.
+- Linux Mint 19.x;
+- Debian 10.1.
 
-It uses the widespread [jonathonf/zfs PPA](https://launchpad.net/~jonathonf/+archive/ubuntu/zfs) for installing the latest ZFS version (0.8.x), which supports native encryption and trimming (among the other improvements over 0.7).
+The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
 
 EFI boot is required (any modern (2011+) system will do); legacy boot is currently not supported.
 

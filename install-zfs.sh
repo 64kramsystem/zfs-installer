@@ -193,8 +193,6 @@ function check_prerequisites {
   # Adds necessary tools for ElementaryOS compatability
   if [[ ! -f /usr/bin/add-apt-repository ]]; then
     echo 'Ensuring installation of Prerequisites...'; sleep 3; sudo apt install -y software-properties-common
-  else
-    exit 1
   fi
   # shellcheck disable=SC2116 # `=~ $(echo ...)` causes a warning; see https://git.io/Je2QP.
   #

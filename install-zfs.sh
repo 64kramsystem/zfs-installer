@@ -39,7 +39,7 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19 [Debian]=10)
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 # HELPER FUNCTIONS #############################################################
@@ -190,6 +190,12 @@ function set_distribution_data {
 function check_prerequisites {
   print_step_info_header
 
+  # Adds necessary tools for ElementaryOS compatability
+  if [[ ! -f /usr/bin/add-apt-repository ]]; then
+    echo 'Instaling Prerequisites...'; sleep 3; sudo apt install -y software-properties-common
+  else
+    exit 1
+  fi
   # shellcheck disable=SC2116 # `=~ $(echo ...)` causes a warning; see https://git.io/Je2QP.
   #
   if [[ ! -d /sys/firmware/efi ]]; then
@@ -417,7 +423,7 @@ function install_host_zfs_module {
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
-    add-apt-repository --yes ppa:jonathonf/zfs
+    add-apt-repository --yes universe
 
     # Required only on LinuxMint, which doesn't update the apt data when invoking `add-apt-repository`.
     # With the current design, it's arguably preferrable to introduce a redundant operation (for
@@ -428,7 +434,7 @@ function install_host_zfs_module {
     # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
     # Module compilation log: `/var/lib/dkms/zfs/0.8.2/build/make.log` (adjust according to version).
     #
-    apt install --yes libelf-dev zfs-dkms
+    apt install --yes libelf-dev debootstrap zfs-initramfs zfs-zed
 
     systemctl stop zfs-zed
     modprobe -r zfs
@@ -701,13 +707,13 @@ function custom_install_operating_system {
 function install_jail_zfs_packages {
   print_step_info_header
 
-  chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
+  chroot_execute "add-apt-repository --yes universe"
 
   chroot_execute "apt update"
 
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
 
-  chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+  chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-zed grub-efi-amd64-signed shim-signed"
 }
 
 function install_jail_zfs_packages_Debian {

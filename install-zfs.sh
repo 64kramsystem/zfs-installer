@@ -192,7 +192,7 @@ function check_prerequisites {
 
   # Adds necessary tools for ElementaryOS compatability
   if [[ ! -f /usr/bin/add-apt-repository ]]; then
-    echo 'Instaling Prerequisites...'; sleep 3; sudo apt install -y software-properties-common
+    echo 'Ensuring installation of Prerequisites...'; sleep 3; sudo apt install -y software-properties-common
   else
     exit 1
   fi
@@ -706,6 +706,8 @@ function custom_install_operating_system {
 #
 function install_jail_zfs_packages {
   print_step_info_header
+
+  chroot_execute "apt install -y software-properties-common"
 
   chroot_execute "add-apt-repository --yes universe"
 

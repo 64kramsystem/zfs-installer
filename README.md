@@ -8,9 +8,9 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 
 The program currently supports:
 
-- Ubuntu 18.04.x (Bionic);
-- Linux Mint 19.x;
-- Debian 10.1.
+- Ubuntu 18.04.x (Bionic)
+- Linux Mint 19.x
+- Debian 10.1
 
 The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
 
@@ -47,7 +47,7 @@ then follow the instructions; halfway through the procedure, the GUI installer o
 
 The program supports unattended installation, via environment variables. The program built-in help explains all the options:
 
-```
+```sh
 $ wget -qO- https://git.io/JelI5 | bash /dev/stdin --help
 Usage: install-zfs.sh [-h|--help]
 

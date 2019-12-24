@@ -39,7 +39,7 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19 [Debian]=10)
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 # HELPER FUNCTIONS #############################################################
@@ -453,6 +453,17 @@ function install_host_zfs_module_Debian {
   fi
 }
 
+function install_host_zfs_module_elementary {
+  print_step_info_header
+
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+    apt update
+    apt install -y software-properties-common
+  fi
+
+  install_host_zfs_module
+}
+
 function prepare_disks {
   print_step_info_header
 
@@ -729,6 +740,14 @@ APT'
 
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
   chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+}
+
+function install_jail_zfs_packages_elementary {
+  print_step_info_header
+
+  chroot_execute "apt install -y software-properties-common"
+
+  install_jail_zfs_packages
 }
 
 function install_and_configure_bootloader {

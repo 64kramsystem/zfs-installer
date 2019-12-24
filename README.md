@@ -8,7 +8,7 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 
 The program currently supports:
 
-- Ubuntu 18.04.x (Bionic)
+- Ubuntu Desktop/Server 18.04.x (Bionic)
 - Linux Mint 19.x
 - Debian 10.1
 - ElementaryOS 5.1 (Hera)
@@ -43,6 +43,15 @@ GET https://git.io/JelI5 | sudo bash -
 ```
 
 then follow the instructions; halfway through the procedure, the GUI installer of the O/S will be launched.
+
+### Ubuntu Server
+
+Ubuntu Server requires a slightly different execution procedure:
+
+- when the installer welcome screen shows up, tap `Ctrl+Alt+F2`,
+- then type `curl -L https://git.io/JelI5 | sudo bash -`.
+
+the rest is the same as the generic procedure.
 
 ### Unattended installations
 

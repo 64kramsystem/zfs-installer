@@ -39,7 +39,8 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
+c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 # HELPER FUNCTIONS #############################################################
@@ -121,6 +122,37 @@ function print_variables {
 
 function chroot_execute {
   chroot $c_zfs_mount_dir bash -c "$1"
+}
+
+# Expects only one change to be applied.
+#
+# $4: pass "slurp" to perform the search/replace in slurp mode.
+#
+# An alternative is to patch the file via patch; both approaches have pros/cons.
+#
+function patch_file {
+  search=$1
+  replace=$2
+  filename=$3
+
+  if [[ "${4:-}" == "slurp" ]]; then
+    local perl_extra_options=(-0777)
+  else
+    local perl_extra_options=()
+  fi
+
+  SEARCH="$search" REPLACE="$replace" perl -i.bak "${perl_extra_options[@]}" -pe 's/$ENV{SEARCH}/$ENV{REPLACE}/' "$filename"
+
+  local diff_output=$(diff "$filename"{.bak,})
+
+  local additions=$(echo "$diff_output" | grep '^<' | wc -l)
+  local deletions=$(echo "$diff_output" | grep '^>' | wc -l)
+
+  if [[ $additions -ne 1 || $deletions -ne 1 ]]; then
+    echo "Unexpected number of additions/deletions (expected 1):"
+    echo "$diff_output"
+    exit 1
+  fi
 }
 
 # PROCEDURE STEP FUNCTIONS #####################################################
@@ -469,6 +501,30 @@ function install_host_zfs_module_elementary {
   install_host_zfs_module
 }
 
+function install_host_zfs_module_UbuntuServer {
+  print_step_info_header
+
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+    # On Ubuntu Server, `/lib/modules` is a SquashFS mount, which is read-only.
+    #
+    cp -R /lib/modules /tmp/
+    systemctl stop 'systemd-udevd*'
+    umount /lib/modules
+    rm -r /lib/modules
+    ln -s /tmp/modules /lib
+    systemctl start 'systemd-udevd*'
+
+    # Additionally, the linux packages for the running kernel are not installed, at least when
+    # the standard installation is performed. Didn't test on the HWE option; if it's not required,
+    # this will be a no-op.
+    #
+    apt update
+    apt install -y "linux-headers-$(uname -r)"
+  fi
+
+  install_host_zfs_module
+}
+
 function prepare_disks {
   print_step_info_header
 
@@ -607,6 +663,19 @@ function create_temp_volume_Debian {
   mkfs.ext4 -F "$v_temp_volume_device"
 }
 
+# Let Subiquity take care of the partitions/FSs; the current patch allow the installer to handle
+# only virtual block devices, not partitions belonging to them.
+#
+function create_temp_volume_UbuntuServer {
+  print_step_info_header
+
+  zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
+
+  udevadm settle
+
+  v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
+}
+
 function install_operating_system {
   print_step_info_header
 
@@ -684,6 +753,91 @@ CONF
   done
 }
 
+function install_operating_system_UbuntuServer {
+  print_step_info_header
+
+  # Patch Subiquity
+  #
+  # We need to patch Subiquity, since it doesn't support virtual block devices. It's not exactly
+  # clear why though, since after patching, the installation works fine.
+  #
+  # See https://bugs.launchpad.net/subiquity/+bug/1811037.
+
+  # Not clear what the number represents, but better to be safe.
+  #
+  local subiquity_id
+  subiquity_id=$(find /snap/subiquity -maxdepth 1 -regextype awk -regex '.*/[[:digit:]]+' -printf '%f')
+
+  unsquashfs -d "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap"
+
+  # Watch out! The first /devices/virtual reference has a trailing slash, but not the other.
+
+  local zfs_volume_name=${v_temp_volume_device##*/}
+
+  patch_file \
+    "if.*startswith\('/devices/virtual'\):" \
+    "if re.match('^/devices/virtual(?"'!'"/block/$zfs_volume_name)', data.get('DEVPATH', '')):" \
+    "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py"
+
+  # Avoid complicating the patch_file API (both for slurping, and for number of replacements);
+  # fortunately, this logic is a simple addition.
+  #
+  perl -i.bak -lpe '$. == 1 && print "import re"' "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py"
+
+  patch_file \
+    "return self.devpath.startswith\('/devices/virtual/'\)" \
+    "return re.match('^/devices/virtual/(?"'!'"block/$zfs_volume_name)', self.devpath)" \
+    "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py"
+
+  patch_file \
+    "(for dev_type in .*)\]:" \
+    "\$1, 'zd']:" \
+    "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/block/__init__.py"
+
+  snap stop subiquity
+  umount "/snap/subiquity/$subiquity_id"
+
+  # Possibly, we could even just symlink, however, since we're running everything in memory, 200+
+  # MB of savings are meaningful.
+  #
+  mksquashfs "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap" -noappend -always-use-fragments
+  rm -rf "$c_unpacked_subiquity_dir"
+
+  snap start subiquity
+
+  # O/S Installation
+  #
+  # Subiquity is designed to prevent the user from opening a terminal, which is (to say the least)
+  # incongruent with the audience.
+
+  local dialog_message='In order to proceed with the installation:
+
+- tap Ctrl+Alt+F1
+- follow up with the GUI installer
+- at the partitioning stage:
+  - select `Use an entire disk`
+  - select `'"$v_temp_volume_device"'`
+  - `Done` -> `Continue` (ignore the warning)
+- follow through the installation
+- after the security updates are installed, tap Ctrl+Alt+F2, and follow up with the ZFS installer
+'
+
+  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+    whiptail --msgbox "$dialog_message" 30 100
+  fi
+
+  swapoff -a
+
+  # See note in install_operating_system(). It's not clear whether this is required on Ubuntu
+  # Server, but it's better not to take risks.
+  #
+  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
+    mount "${v_temp_volume_device}p2" "$c_installed_os_data_mount_dir"
+  fi
+
+  rm -f "$c_installed_os_data_mount_dir"/swap.img
+}
+
 function sync_os_temp_installation_dir_to_rpool {
   # Extended attributes are not used on a standard Ubuntu installation, however, this needs to be generic.
   # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
@@ -692,6 +846,14 @@ function sync_os_temp_installation_dir_to_rpool {
   rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
+
+
+  local mount_dir_submounts
+  mount_dir_submounts=$(mount | MOUNT_DIR="${c_installed_os_data_mount_dir%/}" perl -lane 'print $F[2] if $F[2] =~ /$ENV{MOUNT_DIR}\//')
+
+  for mount_dir in $mount_dir_submounts; do
+    umount "$mount_dir"
+  done
 
   umount "$c_installed_os_data_mount_dir"
 }

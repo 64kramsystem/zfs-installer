@@ -17,7 +17,7 @@ set -o nounset
 
 v_bpool_name=
 v_bpool_tweaks=              # see defaults below for format
-v_linux_distribution=        # Debian, Ubuntu, ...
+v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
 v_linux_distribution_version=
 v_encrypt_rpool=             # 0=false, 1=true
 v_passphrase=
@@ -184,6 +184,11 @@ SHELL
 
 function set_distribution_data {
   v_linux_distribution="$(lsb_release --id --short)"
+
+  if [[ "$v_linux_distribution" == "Ubuntu" ]] && dpkg -s ubuntu-server 2> /dev/null | grep -q '^Status: install ok installed$'; then
+    v_linux_distribution="UbuntuServer"
+  fi
+
   v_linux_version="$(lsb_release --release --short)"
 }
 

@@ -768,6 +768,17 @@ DIFF
 >     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md', 'zd']:
 DIFF
 
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/subiquity/ui/views/installprogress.py" << 'DIFF'
+diff lib/python3.6/site-packages/subiquity/ui/views/installprogress.py{.bak,}
+122,125c122
+<         if include_exit:
+<             btns = [self.view_log_btn, self.exit_btn, self.reboot_btn]
+<         else:
+<             btns = [self.view_log_btn, self.reboot_btn]
+---
+>         btns = [self.view_log_btn, self.exit_btn, self.reboot_btn]
+DIFF
+
   snap stop subiquity
   umount "/snap/subiquity/$subiquity_id"
 
@@ -777,28 +788,36 @@ DIFF
   mksquashfs "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap" -noappend -always-use-fragments
   rm -rf "$c_unpacked_subiquity_dir"
 
-  snap start subiquity
-
   # O/S Installation
   #
   # Subiquity is designed to prevent the user from opening a terminal, which is (to say the least)
   # incongruent with the audience.
 
-  local dialog_message='In order to proceed with the installation:
+  local dialog_message='The Ubuntu Server installer (Subiquity) will now be launched.
 
-- tap Ctrl+Alt+F1
-- follow up with the GUI installer
-- at the partitioning stage:
-  - select `Use an entire disk`
-  - select `'"$v_temp_volume_device"'`
-  - `Done` -> `Continue` (ignore the warning)
+Proceed with the configuration as usual, then, at the partitioning stage:
+
+- select `Use an entire disk`
+- select `'"$v_temp_volume_device"'`
+- `Done` -> `Continue` (ignore the warning)
 - follow through the installation
-- after the security updates are installed, tap Ctrl+Alt+F2, and follow up with the ZFS installer
+- after the security updates are installed, exit to the shell, and follow up with the ZFS installer
+
+Subiquity may show wrong colors, but the installation won'\''t be affected.
 '
 
   if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
     whiptail --msgbox "$dialog_message" 30 100
   fi
+
+  # When not running via `snap start` (which we can't, otherwise it runs in the other terminal),
+  # the binaries are not found, so we manually add them to the path.
+  #
+  # Running with `--bootloader=none` currently crashes Subiquity, possibly due to a bug (missing
+  # `lszdev` binary) - see https://bugs.launchpad.net/subiquity/+bug/1857556.
+  #
+  mount "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap" "/snap/subiquity/$subiquity_id"
+  PATH="/snap/subiquity/$subiquity_id/bin:/snap/subiquity/$subiquity_id/usr/bin:$PATH" snap run subiquity
 
   swapoff -a
 

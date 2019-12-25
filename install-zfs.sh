@@ -576,6 +576,8 @@ function prepare_disks {
 }
 
 function create_temp_volume {
+  print_step_info_header
+
   zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
 
   # The volume may not be immediately available; for reference, "/dev/zvol/.../os-install-temp"
@@ -593,6 +595,8 @@ function create_temp_volume {
 # Differently from Ubuntu, the installer (Calamares) requires a filesystem to be ready.
 #
 function create_temp_volume_Debian {
+  print_step_info_header
+
   create_temp_volume
 
   mkfs.ext4 -F "$v_temp_volume_device"

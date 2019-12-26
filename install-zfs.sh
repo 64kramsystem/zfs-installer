@@ -802,8 +802,6 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 - `Done` -> `Continue` (ignore the warning)
 - follow through the installation
 - after the security updates are installed, exit to the shell, and follow up with the ZFS installer
-
-Subiquity may show wrong colors, but the installation won'\''t be affected.
 '
 
   if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then

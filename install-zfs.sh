@@ -124,37 +124,6 @@ function chroot_execute {
   chroot $c_zfs_mount_dir bash -c "$1"
 }
 
-# Expects only one change to be applied.
-#
-# $4: pass "slurp" to perform the search/replace in slurp mode.
-#
-# An alternative is to patch the file via patch; both approaches have pros/cons.
-#
-function patch_file {
-  search=$1
-  replace=$2
-  filename=$3
-
-  if [[ "${4:-}" == "slurp" ]]; then
-    local perl_extra_options=(-0777)
-  else
-    local perl_extra_options=()
-  fi
-
-  SEARCH="$search" REPLACE="$replace" perl -i.bak "${perl_extra_options[@]}" -pe 's/$ENV{SEARCH}/$ENV{REPLACE}/' "$filename"
-
-  local diff_output=$(diff "$filename"{.bak,})
-
-  local additions=$(echo "$diff_output" | grep '^<' | wc -l)
-  local deletions=$(echo "$diff_output" | grep '^>' | wc -l)
-
-  if [[ $additions -ne 1 || $deletions -ne 1 ]]; then
-    echo "Unexpected number of additions/deletions (expected 1):"
-    echo "$diff_output"
-    exit 1
-  fi
-}
-
 # PROCEDURE STEP FUNCTIONS #####################################################
 
 function display_help_and_exit {
@@ -774,25 +743,30 @@ function install_operating_system_UbuntuServer {
 
   local zfs_volume_name=${v_temp_volume_device##*/}
 
-  patch_file \
-    "if.*startswith\('/devices/virtual'\):" \
-    "if re.match('^/devices/virtual(?"'!'"/block/$zfs_volume_name)', data.get('DEVPATH', '')):" \
-    "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py"
+  # For a search/replace approach (with helper API), check the history.
 
-  # Avoid complicating the patch_file API (both for slurping, and for number of replacements);
-  # fortunately, this logic is a simple addition.
-  #
-  perl -i.bak -lpe '$. == 1 && print "import re"' "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py"
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py" << 'DIFF'
+575c575
+<             if data.get('DEVPATH', '').startswith('/devices/virtual'):
+---
+>             if re.match('^/devices/virtual(?!/block/zd16)', data.get('DEVPATH', '')):
+DIFF
 
-  patch_file \
-    "return self.devpath.startswith\('/devices/virtual/'\)" \
-    "return re.match('^/devices/virtual/(?"'!'"block/$zfs_volume_name)', self.devpath)" \
-    "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py"
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py" << 'DIFF'
+18a19
+> import re
+85c86
+<         return self.devpath.startswith('/devices/virtual/')
+---
+>         return re.match('^/devices/virtual/(?!block/zd16)', self.devpath)
+DIFF
 
-  patch_file \
-    "(for dev_type in .*)\]:" \
-    "\$1, 'zd']:" \
-    "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/block/__init__.py"
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/block/__init__.py" << 'DIFF'
+116c116
+<     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md']:
+---
+>     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md', 'zd']:
+DIFF
 
   snap stop subiquity
   umount "/snap/subiquity/$subiquity_id"

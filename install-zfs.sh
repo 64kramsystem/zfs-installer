@@ -17,7 +17,7 @@ set -o nounset
 
 v_bpool_name=
 v_bpool_tweaks=              # see defaults below for format
-v_linux_distribution=        # Debian, Ubuntu, ...
+v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
 v_linux_distribution_version=
 v_encrypt_rpool=             # 0=false, 1=true
 v_passphrase=
@@ -39,7 +39,8 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
+c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 # HELPER FUNCTIONS #############################################################
@@ -184,6 +185,11 @@ SHELL
 
 function set_distribution_data {
   v_linux_distribution="$(lsb_release --id --short)"
+
+  if [[ "$v_linux_distribution" == "Ubuntu" ]] && dpkg -s ubuntu-server 2> /dev/null | grep -q '^Status: install ok installed$'; then
+    v_linux_distribution="UbuntuServer"
+  fi
+
   v_linux_version="$(lsb_release --release --short)"
 }
 
@@ -464,6 +470,30 @@ function install_host_zfs_module_elementary {
   install_host_zfs_module
 }
 
+function install_host_zfs_module_UbuntuServer {
+  print_step_info_header
+
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+    # On Ubuntu Server, `/lib/modules` is a SquashFS mount, which is read-only.
+    #
+    cp -R /lib/modules /tmp/
+    systemctl stop 'systemd-udevd*'
+    umount /lib/modules
+    rm -r /lib/modules
+    ln -s /tmp/modules /lib
+    systemctl start 'systemd-udevd*'
+
+    # Additionally, the linux packages for the running kernel are not installed, at least when
+    # the standard installation is performed. Didn't test on the HWE option; if it's not required,
+    # this will be a no-op.
+    #
+    apt update
+    apt install -y "linux-headers-$(uname -r)"
+  fi
+
+  install_host_zfs_module
+}
+
 function prepare_disks {
   print_step_info_header
 
@@ -576,6 +606,8 @@ function prepare_disks {
 }
 
 function create_temp_volume {
+  print_step_info_header
+
   zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
 
   # The volume may not be immediately available; for reference, "/dev/zvol/.../os-install-temp"
@@ -593,9 +625,24 @@ function create_temp_volume {
 # Differently from Ubuntu, the installer (Calamares) requires a filesystem to be ready.
 #
 function create_temp_volume_Debian {
+  print_step_info_header
+
   create_temp_volume
 
   mkfs.ext4 -F "$v_temp_volume_device"
+}
+
+# Let Subiquity take care of the partitions/FSs; the current patch allow the installer to handle
+# only virtual block devices, not partitions belonging to them.
+#
+function create_temp_volume_UbuntuServer {
+  print_step_info_header
+
+  zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
+
+  udevadm settle
+
+  v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
 }
 
 function install_operating_system {
@@ -675,6 +722,115 @@ CONF
   done
 }
 
+function install_operating_system_UbuntuServer {
+  print_step_info_header
+
+  # Patch Subiquity
+  #
+  # We need to patch Subiquity, since it doesn't support virtual block devices. It's not exactly
+  # clear why though, since after patching, the installation works fine.
+  #
+  # See https://bugs.launchpad.net/subiquity/+bug/1811037.
+
+  # Not clear what the number represents, but better to be safe.
+  #
+  local subiquity_id
+  subiquity_id=$(find /snap/subiquity -maxdepth 1 -regextype awk -regex '.*/[[:digit:]]+' -printf '%f')
+
+  unsquashfs -d "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap"
+
+  # Watch out! The first /devices/virtual reference has a trailing slash, but not the other.
+
+  local zfs_volume_name=${v_temp_volume_device##*/}
+
+  # For a search/replace approach (with helper API), check the history.
+
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py" << 'DIFF'
+575c575
+<             if data.get('DEVPATH', '').startswith('/devices/virtual'):
+---
+>             if re.match('^/devices/virtual(?!/block/zd16)', data.get('DEVPATH', '')):
+DIFF
+
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py" << 'DIFF'
+18a19
+> import re
+85c86
+<         return self.devpath.startswith('/devices/virtual/')
+---
+>         return re.match('^/devices/virtual/(?!block/zd16)', self.devpath)
+DIFF
+
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/block/__init__.py" << 'DIFF'
+116c116
+<     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md']:
+---
+>     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md', 'zd']:
+DIFF
+
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/subiquity/ui/views/installprogress.py" << 'DIFF'
+diff lib/python3.6/site-packages/subiquity/ui/views/installprogress.py{.bak,}
+122,125c122
+<         if include_exit:
+<             btns = [self.view_log_btn, self.exit_btn, self.reboot_btn]
+<         else:
+<             btns = [self.view_log_btn, self.reboot_btn]
+---
+>         btns = [self.view_log_btn, self.exit_btn, self.reboot_btn]
+DIFF
+
+  snap stop subiquity
+  umount "/snap/subiquity/$subiquity_id"
+
+  # Possibly, we could even just symlink, however, since we're running everything in memory, 200+
+  # MB of savings are meaningful.
+  #
+  mksquashfs "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap" -noappend -always-use-fragments
+  rm -rf "$c_unpacked_subiquity_dir"
+
+  # O/S Installation
+  #
+  # Subiquity is designed to prevent the user from opening a terminal, which is (to say the least)
+  # incongruent with the audience.
+
+  local dialog_message='The Ubuntu Server installer (Subiquity) will now be launched.
+
+Proceed with the configuration as usual, then, at the partitioning stage:
+
+- select `Use an entire disk`
+- select `'"$v_temp_volume_device"'`
+- `Done` -> `Continue` (ignore the warning)
+- follow through the installation
+- after the security updates are installed, exit to the shell, and follow up with the ZFS installer
+
+Subiquity may show wrong colors, but the installation won'\''t be affected.
+'
+
+  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+    whiptail --msgbox "$dialog_message" 30 100
+  fi
+
+  # When not running via `snap start` (which we can't, otherwise it runs in the other terminal),
+  # the binaries are not found, so we manually add them to the path.
+  #
+  # Running with `--bootloader=none` currently crashes Subiquity, possibly due to a bug (missing
+  # `lszdev` binary) - see https://bugs.launchpad.net/subiquity/+bug/1857556.
+  #
+  mount "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap" "/snap/subiquity/$subiquity_id"
+  PATH="/snap/subiquity/$subiquity_id/bin:/snap/subiquity/$subiquity_id/usr/bin:$PATH" snap run subiquity
+
+  swapoff -a
+
+  # See note in install_operating_system(). It's not clear whether this is required on Ubuntu
+  # Server, but it's better not to take risks.
+  #
+  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
+    mount "${v_temp_volume_device}p2" "$c_installed_os_data_mount_dir"
+  fi
+
+  rm -f "$c_installed_os_data_mount_dir"/swap.img
+}
+
 function sync_os_temp_installation_dir_to_rpool {
   # Extended attributes are not used on a standard Ubuntu installation, however, this needs to be generic.
   # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
@@ -683,6 +839,14 @@ function sync_os_temp_installation_dir_to_rpool {
   rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
+
+
+  local mount_dir_submounts
+  mount_dir_submounts=$(mount | MOUNT_DIR="${c_installed_os_data_mount_dir%/}" perl -lane 'print $F[2] if $F[2] =~ /$ENV{MOUNT_DIR}\//')
+
+  for mount_dir in $mount_dir_submounts; do
+    umount "$mount_dir"
+  done
 
   umount "$c_installed_os_data_mount_dir"
 }

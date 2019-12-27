@@ -739,8 +739,6 @@ function install_operating_system_UbuntuServer {
 
   unsquashfs -d "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap"
 
-  # Watch out! The first /devices/virtual reference has a trailing slash, but not the other.
-
   local zfs_volume_name=${v_temp_volume_device##*/}
 
   # For a search/replace approach (with helper API), check the history.

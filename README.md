@@ -100,7 +100,7 @@ This project is entirely oriented to community requests, as the target is to fac
 
 Both for feature requests and bugs, [open a GitHub issue](https://github.com/saveriomiroddi/zfs-installer/issues/new).
 
-For issues, also attach the file `/tmp/install-zfs.log`. It doesn't contain any information aside what required for performing the installation; it can be trivially inspected, as it's a standard Bash debug output.
+For issues, also attach the content of the directory `/tmp/zfs-installer`. It doesn't contain any information aside what required for performing the installation; it can be trivially inspected, as it's a standard Bash debug output.
 
 ## Credits
 

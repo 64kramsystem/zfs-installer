@@ -743,20 +743,20 @@ function install_operating_system_UbuntuServer {
 
   # For a search/replace approach (with helper API), check the history.
 
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py" << 'DIFF'
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py" << DIFF
 575c575
 <             if data.get('DEVPATH', '').startswith('/devices/virtual'):
 ---
->             if re.match('^/devices/virtual(?!/block/zd16)', data.get('DEVPATH', '')):
+>             if re.match('^/devices/virtual(?!/block/$zfs_volume_name)', data.get('DEVPATH', '')):
 DIFF
 
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py" << 'DIFF'
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py" << DIFF
 18a19
 > import re
 85c86
 <         return self.devpath.startswith('/devices/virtual/')
 ---
->         return re.match('^/devices/virtual/(?!block/zd16)', self.devpath)
+>         return re.match('^/devices/virtual/(?!block/$zfs_volume_name)', self.devpath)
 DIFF
 
   patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/block/__init__.py" << 'DIFF'

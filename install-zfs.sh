@@ -438,6 +438,8 @@ function install_host_zfs_module {
     modprobe zfs
     systemctl start zfs-zed
   fi
+
+  zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
 }
 
 function install_host_zfs_module_Debian {
@@ -454,6 +456,8 @@ function install_host_zfs_module_Debian {
 
     modprobe zfs
   fi
+
+  zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
 }
 
 function install_host_zfs_module_elementary {

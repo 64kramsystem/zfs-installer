@@ -174,6 +174,12 @@ function activate_debug {
   set -x
 }
 
+function store_os_distro_information {
+  print_step_info_header
+
+  lsb_release --all > "$c_log_dir/lsb_release.log"
+}
+
 function set_distribution_data {
   v_linux_distribution="$(lsb_release --id --short)"
 
@@ -1062,6 +1068,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 activate_debug
+store_os_distro_information
 set_distribution_data
 check_prerequisites
 display_intro_banner

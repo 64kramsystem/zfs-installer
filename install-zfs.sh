@@ -739,26 +739,24 @@ function install_operating_system_UbuntuServer {
 
   unsquashfs -d "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap"
 
-  # Watch out! The first /devices/virtual reference has a trailing slash, but not the other.
-
   local zfs_volume_name=${v_temp_volume_device##*/}
 
   # For a search/replace approach (with helper API), check the history.
 
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py" << 'DIFF'
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py" << DIFF
 575c575
 <             if data.get('DEVPATH', '').startswith('/devices/virtual'):
 ---
->             if re.match('^/devices/virtual(?!/block/zd16)', data.get('DEVPATH', '')):
+>             if re.match('^/devices/virtual(?!/block/$zfs_volume_name)', data.get('DEVPATH', '')):
 DIFF
 
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py" << 'DIFF'
+  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py" << DIFF
 18a19
 > import re
 85c86
 <         return self.devpath.startswith('/devices/virtual/')
 ---
->         return re.match('^/devices/virtual/(?!block/zd16)', self.devpath)
+>         return re.match('^/devices/virtual/(?!block/$zfs_volume_name)', self.devpath)
 DIFF
 
   patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/block/__init__.py" << 'DIFF'
@@ -837,7 +835,6 @@ function sync_os_temp_installation_dir_to_rpool {
   rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
-
 
   local mount_dir_submounts
   mount_dir_submounts=$(mount | MOUNT_DIR="${c_installed_os_data_mount_dir%/}" perl -lane 'print $F[2] if $F[2] =~ /$ENV{MOUNT_DIR}\//')

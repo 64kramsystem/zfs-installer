@@ -39,6 +39,7 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
+c_log_dir="$(dirname "$(mktemp)")/zfs-installer"
 c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
 declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
@@ -166,21 +167,17 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 function activate_debug {
   print_step_info_header
 
-  exec 5> "$(dirname "$(mktemp)")/install-zfs.log"
+  mkdir -p "$c_log_dir"
+
+  exec 5> "$c_log_dir/install.log"
   BASH_XTRACEFD="5"
   set -x
 }
 
-function print_preset_variables {
-  cat <<SHELL
-# Preset variables for rerun:
+function store_os_distro_information {
+  print_step_info_header
 
-ZFS_SELECTED_DISKS=$(printf "%s," "${v_selected_disks[@]}" | sed 's/.$//') \\
-ZFS_ENCRYPT_RPOOL=$v_encrypt_rpool ZFS_PASSPHRASE=$v_passphrase \\
-ZFS_BPOOL_NAME=$v_bpool_name ZFS_RPOOL_NAME=$v_rpool_name \\
-ZFS_BPOOL_TWEAKS="$v_bpool_tweaks" ZFS_RPOOL_TWEAKS="$v_rpool_tweaks" \\
-ZFS_SWAP_SIZE=$v_swap_size ZFS_FREE_TAIL_SPACE=$v_free_tail_space
-SHELL
+  lsb_release --all > "$c_log_dir/lsb_release.log"
 }
 
 function set_distribution_data {
@@ -441,6 +438,8 @@ function install_host_zfs_module {
     modprobe zfs
     systemctl start zfs-zed
   fi
+
+  zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
 }
 
 function install_host_zfs_module_Debian {
@@ -457,6 +456,8 @@ function install_host_zfs_module_Debian {
 
     modprobe zfs
   fi
+
+  zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
 }
 
 function install_host_zfs_module_elementary {
@@ -1071,7 +1072,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 activate_debug
-trap print_preset_variables ERR
+store_os_distro_information
 set_distribution_data
 check_prerequisites
 display_intro_banner

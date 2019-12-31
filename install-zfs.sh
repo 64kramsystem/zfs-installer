@@ -262,12 +262,18 @@ function select_disks {
 
     mounted_devices="$(df | awk 'BEGIN {getline} {print $1}' | xargs -n 1 lsblk -no pkname 2> /dev/null | sort -u || true)"
 
+    if [[ ${#v_system_disks[@]} -eq 1 ]]; then
+      local disk_selection_status=ON
+    else
+      local disk_selection_status=OFF
+    fi
+
     for disk_id in "${v_system_disks[@]}"; do
       local block_device_name
       block_device_basename="$(basename "$(readlink -f "$disk_id")")"
 
       if ! echo "$mounted_devices" | grep -q "^$block_device_basename\$"; then
-        menu_entries_option+=("$disk_id" "($block_device_basename)" OFF)
+        menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
       fi
     done
 

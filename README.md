@@ -49,7 +49,7 @@ then follow the instructions; halfway through the procedure, the GUI installer o
 Ubuntu Server requires a slightly different execution procedure:
 
 - when the installer welcome screen shows up, tap `Ctrl+Alt+F2`,
-- then type `curl -L https://git.io/JelI5 | sudo bash -`.
+- then type `sudo -- bash -c "$(curl -L https://git.io/JelI5)"`.
 
 the rest is the same as the generic procedure.
 

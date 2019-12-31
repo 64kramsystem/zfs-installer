@@ -835,11 +835,17 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 }
 
 function sync_os_temp_installation_dir_to_rpool {
+  print_step_info_header
+
   # Extended attributes are not used on a standard Ubuntu installation, however, this needs to be generic.
   # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
   # ❤️ Perl ❤️
   #
-  rsync -avX --exclude=/swapfile --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
+  # The motd file needs to be excluded because it vanishes during the rsync execution, causing an
+  # error. Without checking, it's not clear why this happens, since Subiquity supposedly finished,
+  # but it's not a necessary file.
+  #
+  rsync -avX --exclude=/swapfile --exclude=/run/motd.dynamic.new --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
@@ -854,6 +860,8 @@ function sync_os_temp_installation_dir_to_rpool {
 }
 
 function destroy_temp_volume {
+  print_step_info_header
+
   zfs destroy "$v_rpool_name/os-install-temp"
 }
 

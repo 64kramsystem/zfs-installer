@@ -495,7 +495,7 @@ function install_host_packages_UbuntuServer {
     # this will be a no-op.
     #
     apt update
-    apt install -y "linux-headers-$(uname -r)"
+    apt install -y "linux-headers-$(uname -r)" efibootmgr
   fi
 
   install_host_packages

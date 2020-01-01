@@ -420,7 +420,7 @@ function ask_pool_tweaks {
   print_variables v_bpool_tweaks v_rpool_tweaks
 }
 
-function install_host_zfs_module {
+function install_host_packages {
   print_step_info_header
 
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
@@ -448,7 +448,7 @@ function install_host_zfs_module {
   zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
 }
 
-function install_host_zfs_module_Debian {
+function install_host_packages_Debian {
   print_step_info_header
 
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
@@ -466,7 +466,7 @@ function install_host_zfs_module_Debian {
   zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
 }
 
-function install_host_zfs_module_elementary {
+function install_host_packages_elementary {
   print_step_info_header
 
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
@@ -474,10 +474,10 @@ function install_host_zfs_module_elementary {
     apt install -y software-properties-common
   fi
 
-  install_host_zfs_module
+  install_host_packages
 }
 
-function install_host_zfs_module_UbuntuServer {
+function install_host_packages_UbuntuServer {
   print_step_info_header
 
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
@@ -495,10 +495,10 @@ function install_host_zfs_module_UbuntuServer {
     # this will be a no-op.
     #
     apt update
-    apt install -y "linux-headers-$(uname -r)"
+    apt install -y "linux-headers-$(uname -r)" efibootmgr
   fi
 
-  install_host_zfs_module
+  install_host_packages
 }
 
 function prepare_disks {
@@ -881,7 +881,7 @@ function custom_install_operating_system {
   sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
-# See install_host_zfs_module() for some comments.
+# See install_host_packages() for some comments.
 #
 function install_jail_zfs_packages {
   print_step_info_header
@@ -1100,7 +1100,7 @@ ask_free_tail_space
 ask_pool_names
 ask_pool_tweaks
 
-distro_dependent_invoke "install_host_zfs_module"
+distro_dependent_invoke "install_host_packages"
 prepare_disks
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then

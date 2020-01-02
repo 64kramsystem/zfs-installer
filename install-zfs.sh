@@ -244,21 +244,29 @@ function find_disks {
   # shellcheck disable=SC2012 # `ls` may clean the output, but in this case, it doesn't matter
   ls -l /dev/disk/by-id | tail -n +2 | perl -lane 'print "@F[8..10]"' > "$c_disks_log"
 
+  local candidate_disk_ids
+  local mounted_devices
+
   # Iterating via here-string generates an empty line when no devices are found. The options are
   # either using this strategy, or adding a conditional.
   #
-  local candidate_disk_ids
   candidate_disk_ids=$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi)-.+' -not -regex '.+-part[0-9]+$' | sort)
+  mounted_devices="$(df | awk 'BEGIN {getline} {print $1}' | xargs -n 1 lsblk -no pkname 2> /dev/null | sort -u || true)"
 
   while read -r disk_id || [[ -n "$disk_id" ]]; do
     local device_info
+    local block_device_name
+
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
+    block_device_basename="$(basename "$(readlink -f "$disk_id")")"
 
     # The USB test may be redundant, due to `/dev/disk/by-id` prefixing removable devices with
     # `usb`, however, until certain, this is kept.
     #
     if echo "$device_info" | grep -q '^ID_TYPE=disk$' && ! echo "$device_info" | grep -q '^ID_BUS=usb$'; then
-      v_suitable_disks+=("$disk_id")
+      if ! echo "$mounted_devices" | grep -q "^$block_device_basename\$"; then
+        v_suitable_disks+=("$disk_id")
+      fi
     fi
 
     cat >> "$c_disks_log" << LOG
@@ -293,9 +301,6 @@ function select_disks {
     mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
   else
     local menu_entries_option=()
-    local mounted_devices
-
-    mounted_devices="$(df | awk 'BEGIN {getline} {print $1}' | xargs -n 1 lsblk -no pkname 2> /dev/null | sort -u || true)"
 
     if [[ ${#v_suitable_disks[@]} -eq 1 ]]; then
       local disk_selection_status=ON
@@ -304,12 +309,7 @@ function select_disks {
     fi
 
     for disk_id in "${v_suitable_disks[@]}"; do
-      local block_device_name
-      block_device_basename="$(basename "$(readlink -f "$disk_id")")"
-
-      if ! echo "$mounted_devices" | grep -q "^$block_device_basename\$"; then
-        menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
-      fi
+      menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
     done
 
     local dialog_message="Select the ZFS devices (multiple selections will be in mirror).

@@ -271,6 +271,18 @@ LOG
 
   done < <(echo -n "$candidate_disk_ids")
 
+  if [[ ${#v_system_disks[@]} -eq 0 ]]; then
+    local dialog_message='No suitable disks have been found!
+
+If you'\''re running inside a VMWare virtual machine, you need to add set `disk.EnableUUID = "TRUE"` in the .vmx configuration file.
+
+If you think this is a bug, please open an issue on https://github.com/saveriomiroddi/zfs-installer/issues, and attach the file `'"$c_disks_log"'`.
+'
+    whiptail --msgbox "$dialog_message" 30 100
+
+    exit 1
+  fi
+
   print_variables v_system_disks
 }
 

@@ -39,10 +39,14 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-c_log_dir="$(dirname "$(mktemp)")/zfs-installer"
 c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
 declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
+
+c_log_dir=$(dirname "$(mktemp)")/zfs-installer
+c_install_log=$c_log_dir/install.log
+c_lsb_release_log=$c_log_dir/lsb_release.log
+c_zfs_module_version_log=$c_log_dir/zfs_updated_module_version.log
 
 # HELPER FUNCTIONS #############################################################
 
@@ -169,7 +173,7 @@ function activate_debug {
 
   mkdir -p "$c_log_dir"
 
-  exec 5> "$c_log_dir/install.log"
+  exec 5> "$c_install_log"
   BASH_XTRACEFD="5"
   set -x
 }
@@ -177,7 +181,7 @@ function activate_debug {
 function store_os_distro_information {
   print_step_info_header
 
-  lsb_release --all > "$c_log_dir/lsb_release.log"
+  lsb_release --all > "$c_lsb_release_log"
 }
 
 function set_distribution_data {
@@ -445,7 +449,7 @@ function install_host_zfs_module {
     systemctl start zfs-zed
   fi
 
-  zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
+  zfs --version > "$c_zfs_module_version_log" 2>&1
 }
 
 function install_host_zfs_module_Debian {
@@ -463,7 +467,7 @@ function install_host_zfs_module_Debian {
     modprobe zfs
   fi
 
-  zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
+  zfs --version > "$c_zfs_module_version_log" 2>&1
 }
 
 function install_host_zfs_module_elementary {

@@ -31,7 +31,7 @@ v_free_tail_space=           # integer
 # Variables set during execution
 
 v_temp_volume_device=        # /dev/zdN; scope: create_temp_volume -> install_operating_system
-v_system_disks=()            # (/dev/by-id/disk_id, ...); scope: find_disks -> select_disk
+v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_disks -> select_disk
 
 # Constants
 
@@ -258,7 +258,7 @@ function find_disks {
     # `usb`, however, until certain, this is kept.
     #
     if echo "$device_info" | grep -q '^ID_TYPE=disk$' && ! echo "$device_info" | grep -q '^ID_BUS=usb$'; then
-      v_system_disks+=("$disk_id")
+      v_suitable_disks+=("$disk_id")
     fi
 
     cat >> "$c_disks_log" << LOG
@@ -271,7 +271,7 @@ LOG
 
   done < <(echo -n "$candidate_disk_ids")
 
-  if [[ ${#v_system_disks[@]} -eq 0 ]]; then
+  if [[ ${#v_suitable_disks[@]} -eq 0 ]]; then
     local dialog_message='No suitable disks have been found!
 
 If you'\''re running inside a VMWare virtual machine, you need to add set `disk.EnableUUID = "TRUE"` in the .vmx configuration file.
@@ -283,7 +283,7 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
     exit 1
   fi
 
-  print_variables v_system_disks
+  print_variables v_suitable_disks
 }
 
 function select_disks {
@@ -297,13 +297,13 @@ function select_disks {
 
     mounted_devices="$(df | awk 'BEGIN {getline} {print $1}' | xargs -n 1 lsblk -no pkname 2> /dev/null | sort -u || true)"
 
-    if [[ ${#v_system_disks[@]} -eq 1 ]]; then
+    if [[ ${#v_suitable_disks[@]} -eq 1 ]]; then
       local disk_selection_status=ON
     else
       local disk_selection_status=OFF
     fi
 
-    for disk_id in "${v_system_disks[@]}"; do
+    for disk_id in "${v_suitable_disks[@]}"; do
       local block_device_name
       block_device_basename="$(basename "$(readlink -f "$disk_id")")"
 

@@ -31,7 +31,7 @@ v_free_tail_space=           # integer
 # Variables set during execution
 
 v_temp_volume_device=        # /dev/zdN; scope: create_temp_volume -> install_operating_system
-v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_disks -> select_disk
+v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
 
 # Constants
 
@@ -233,7 +233,7 @@ In order to stop the procedure, hit Esc twice during dialogs (excluding yes/no o
   fi
 }
 
-function find_disks {
+function find_suitable_disks {
   print_step_info_header
 
   # In some freaky cases, `/dev/disk/by-id` is not up to date, so we refresh. One case is after
@@ -1125,7 +1125,7 @@ store_os_distro_information
 set_distribution_data
 check_prerequisites
 display_intro_banner
-find_disks
+find_suitable_disks
 
 select_disks
 distro_dependent_invoke "ask_root_password" --noforce

@@ -47,7 +47,7 @@ c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
 c_lsb_release_log=$c_log_dir/lsb_release.log
 c_disks_log=$c_log_dir/disks.log
-c_zfs_module_version_log=$c_log_dir/zfs_updated_module_version.log
+c_zfs_module_version_log=$c_log_dir/updated_module_versions.log
 
 # HELPER FUNCTIONS #############################################################
 

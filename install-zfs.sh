@@ -31,7 +31,7 @@ v_free_tail_space=           # integer
 # Variables set during execution
 
 v_temp_volume_device=        # /dev/zdN; scope: create_temp_volume -> install_operating_system
-declare -a v_system_disks    # (/dev/by-id/disk_id, ...); scope: find_disks -> select_disk
+v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
 
 # Constants
 
@@ -39,10 +39,15 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-c_log_dir="$(dirname "$(mktemp)")/zfs-installer"
 c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
 declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
+
+c_log_dir=$(dirname "$(mktemp)")/zfs-installer
+c_install_log=$c_log_dir/install.log
+c_lsb_release_log=$c_log_dir/lsb_release.log
+c_disks_log=$c_log_dir/disks.log
+c_zfs_module_version_log=$c_log_dir/updated_module_versions.log
 
 # HELPER FUNCTIONS #############################################################
 
@@ -169,7 +174,7 @@ function activate_debug {
 
   mkdir -p "$c_log_dir"
 
-  exec 5> "$c_log_dir/install.log"
+  exec 5> "$c_install_log"
   BASH_XTRACEFD="5"
   set -x
 }
@@ -177,7 +182,7 @@ function activate_debug {
 function store_os_distro_information {
   print_step_info_header
 
-  lsb_release --all > "$c_log_dir/lsb_release.log"
+  lsb_release --all > "$c_lsb_release_log"
 }
 
 function set_distribution_data {
@@ -228,7 +233,7 @@ In order to stop the procedure, hit Esc twice during dialogs (excluding yes/no o
   fi
 }
 
-function find_disks {
+function find_suitable_disks {
   print_step_info_header
 
   # In some freaky cases, `/dev/disk/by-id` is not up to date, so we refresh. One case is after
@@ -236,19 +241,57 @@ function find_disks {
   #
   udevadm trigger
 
-  while read -r disk_id; do
+  # shellcheck disable=SC2012 # `ls` may clean the output, but in this case, it doesn't matter
+  ls -l /dev/disk/by-id | tail -n +2 | perl -lane 'print "@F[8..10]"' > "$c_disks_log"
+
+  local candidate_disk_ids
+  local mounted_devices
+
+  # Iterating via here-string generates an empty line when no devices are found. The options are
+  # either using this strategy, or adding a conditional.
+  #
+  candidate_disk_ids=$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi)-.+' -not -regex '.+-part[0-9]+$' | sort)
+  mounted_devices="$(df | awk 'BEGIN {getline} {print $1}' | xargs -n 1 lsblk -no pkname 2> /dev/null | sort -u || true)"
+
+  while read -r disk_id || [[ -n "$disk_id" ]]; do
     local device_info
+    local block_device_name
+
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
+    block_device_basename="$(basename "$(readlink -f "$disk_id")")"
 
     # The USB test may be redundant, due to `/dev/disk/by-id` prefixing removable devices with
     # `usb`, however, until certain, this is kept.
     #
     if echo "$device_info" | grep -q '^ID_TYPE=disk$' && ! echo "$device_info" | grep -q '^ID_BUS=usb$'; then
-      v_system_disks+=("$disk_id")
+      if ! echo "$mounted_devices" | grep -q "^$block_device_basename\$"; then
+        v_suitable_disks+=("$disk_id")
+      fi
     fi
-  done <<< "$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi)-.+' -not -regex '.+-part[0-9]+$' | sort)"
 
-  print_variables v_system_disks
+    cat >> "$c_disks_log" << LOG
+
+## DEVICE: $disk_id ################################
+
+$(udevadm info --query=property "$(readlink -f "$disk_id")")
+
+LOG
+
+  done < <(echo -n "$candidate_disk_ids")
+
+  if [[ ${#v_suitable_disks[@]} -eq 0 ]]; then
+    local dialog_message='No suitable disks have been found!
+
+If you'\''re running inside a VMWare virtual machine, you need to add set `disk.EnableUUID = "TRUE"` in the .vmx configuration file.
+
+If you think this is a bug, please open an issue on https://github.com/saveriomiroddi/zfs-installer/issues, and attach the file `'"$c_disks_log"'`.
+'
+    whiptail --msgbox "$dialog_message" 30 100
+
+    exit 1
+  fi
+
+  print_variables v_suitable_disks
 }
 
 function select_disks {
@@ -257,31 +300,29 @@ function select_disks {
   if [[ "${ZFS_SELECTED_DISKS:-}" != "" ]]; then
     mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
   else
-    local menu_entries_option=()
-    local mounted_devices
+    while true; do
+      local menu_entries_option=()
 
-    mounted_devices="$(df | awk 'BEGIN {getline} {print $1}' | xargs -n 1 lsblk -no pkname 2> /dev/null | sort -u || true)"
-
-    if [[ ${#v_system_disks[@]} -eq 1 ]]; then
-      local disk_selection_status=ON
-    else
-      local disk_selection_status=OFF
-    fi
-
-    for disk_id in "${v_system_disks[@]}"; do
-      local block_device_name
-      block_device_basename="$(basename "$(readlink -f "$disk_id")")"
-
-      if ! echo "$mounted_devices" | grep -q "^$block_device_basename\$"; then
-        menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
+      if [[ ${#v_suitable_disks[@]} -eq 1 ]]; then
+        local disk_selection_status=ON
+      else
+        local disk_selection_status=OFF
       fi
-    done
 
-    local dialog_message="Select the ZFS devices (multiple selections will be in mirror).
+      for disk_id in "${v_suitable_disks[@]}"; do
+        menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
+      done
+
+      local dialog_message="Select the ZFS devices (multiple selections will be in mirror).
 
 Devices with mounted partitions, cdroms, and removable devices are not displayed!
 "
-    mapfile -t v_selected_disks < <(whiptail --checklist --separate-output "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
+      mapfile -t v_selected_disks < <(whiptail --checklist --separate-output "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
+
+      if [[ ${#v_selected_disks[@]} -gt 0 ]]; then
+        break
+      fi
+    done
   fi
 
   print_variables v_selected_disks
@@ -445,7 +486,7 @@ function install_host_packages {
     systemctl start zfs-zed
   fi
 
-  zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
+  zfs --version > "$c_zfs_module_version_log" 2>&1
 }
 
 function install_host_packages_Debian {
@@ -463,7 +504,7 @@ function install_host_packages_Debian {
     modprobe zfs
   fi
 
-  zfs --version > "$c_log_dir/zfs_updated_module_version.log" 2>&1
+  zfs --version > "$c_zfs_module_version_log" 2>&1
 }
 
 function install_host_packages_elementary {
@@ -1090,7 +1131,7 @@ store_os_distro_information
 set_distribution_data
 check_prerequisites
 display_intro_banner
-find_disks
+find_suitable_disks
 
 select_disks
 distro_dependent_invoke "ask_root_password" --noforce

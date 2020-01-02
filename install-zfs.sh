@@ -300,23 +300,29 @@ function select_disks {
   if [[ "${ZFS_SELECTED_DISKS:-}" != "" ]]; then
     mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
   else
-    local menu_entries_option=()
+    while true; do
+      local menu_entries_option=()
 
-    if [[ ${#v_suitable_disks[@]} -eq 1 ]]; then
-      local disk_selection_status=ON
-    else
-      local disk_selection_status=OFF
-    fi
+      if [[ ${#v_suitable_disks[@]} -eq 1 ]]; then
+        local disk_selection_status=ON
+      else
+        local disk_selection_status=OFF
+      fi
 
-    for disk_id in "${v_suitable_disks[@]}"; do
-      menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
-    done
+      for disk_id in "${v_suitable_disks[@]}"; do
+        menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
+      done
 
-    local dialog_message="Select the ZFS devices (multiple selections will be in mirror).
+      local dialog_message="Select the ZFS devices (multiple selections will be in mirror).
 
 Devices with mounted partitions, cdroms, and removable devices are not displayed!
 "
-    mapfile -t v_selected_disks < <(whiptail --checklist --separate-output "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
+      mapfile -t v_selected_disks < <(whiptail --checklist --separate-output "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
+
+      if [[ ${#v_selected_disks[@]} -gt 0 ]]; then
+        break
+      fi
+    done
   fi
 
   print_variables v_selected_disks

@@ -31,7 +31,7 @@ v_free_tail_space=           # integer
 # Variables set during execution
 
 v_temp_volume_device=        # /dev/zdN; scope: create_temp_volume -> install_operating_system
-declare -a v_system_disks    # (/dev/by-id/disk_id, ...); scope: find_disks -> select_disk
+v_system_disks=()            # (/dev/by-id/disk_id, ...); scope: find_disks -> select_disk
 
 # Constants
 
@@ -244,7 +244,13 @@ function find_disks {
   # shellcheck disable=SC2012 # `ls` may clean the output, but in this case, it doesn't matter
   ls -l /dev/disk/by-id | tail -n +2 | perl -lane 'print "@F[8..10]"' > "$c_disks_log"
 
-  while read -r disk_id; do
+  # Iterating via here-string generates an empty line when no devices are found. The options are
+  # either using this strategy, or adding a conditional.
+  #
+  local candidate_disk_ids
+  candidate_disk_ids=$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi)-.+' -not -regex '.+-part[0-9]+$' | sort)
+
+  while read -r disk_id || [[ -n "$disk_id" ]]; do
     local device_info
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
 
@@ -263,7 +269,7 @@ $(udevadm info --query=property "$(readlink -f "$disk_id")")
 
 LOG
 
-  done <<< "$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi)-.+' -not -regex '.+-part[0-9]+$' | sort)"
+  done < <(echo -n "$candidate_disk_ids")
 
   print_variables v_system_disks
 }

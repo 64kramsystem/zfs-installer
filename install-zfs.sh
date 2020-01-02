@@ -46,6 +46,7 @@ c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
 c_lsb_release_log=$c_log_dir/lsb_release.log
+c_disks_log=$c_log_dir/disks.log
 c_zfs_module_version_log=$c_log_dir/zfs_updated_module_version.log
 
 # HELPER FUNCTIONS #############################################################
@@ -240,6 +241,9 @@ function find_disks {
   #
   udevadm trigger
 
+  # shellcheck disable=SC2012 # `ls` may clean the output, but in this case, it doesn't matter
+  ls -l /dev/disk/by-id | tail -n +2 | perl -lane 'print "@F[8..10]"' > "$c_disks_log"
+
   while read -r disk_id; do
     local device_info
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
@@ -250,6 +254,15 @@ function find_disks {
     if echo "$device_info" | grep -q '^ID_TYPE=disk$' && ! echo "$device_info" | grep -q '^ID_BUS=usb$'; then
       v_system_disks+=("$disk_id")
     fi
+
+    cat >> "$c_disks_log" << LOG
+
+## DEVICE: $disk_id ################################
+
+$(udevadm info --query=property "$(readlink -f "$disk_id")")
+
+LOG
+
   done <<< "$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi)-.+' -not -regex '.+-part[0-9]+$' | sort)"
 
   print_variables v_system_disks

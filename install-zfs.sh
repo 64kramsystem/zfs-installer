@@ -260,10 +260,15 @@ function find_suitable_disks {
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
     block_device_basename="$(basename "$(readlink -f "$disk_id")")"
 
-    # The USB test may be redundant, due to `/dev/disk/by-id` prefixing removable devices with
-    # `usb`, however, until certain, this is kept.
+    # It's unclear if it's possible to establish with certainty what is an internal disk:
     #
-    if echo "$device_info" | grep -q '^ID_TYPE=disk$' && ! echo "$device_info" | grep -q '^ID_BUS=usb$'; then
+    # - there is no (obvious) spec around
+    # - pretty much everything has `DEVTYPE=disk`, e.g. LUKS devices
+    # - ID_TYPE is optional
+    #
+    # Therefore, it's probably best to rely on the id name, and just filter out optical devices.
+    #
+    if ! grep -q '^ID_TYPE=cd$' <<< "$device_info"; then
       if ! echo "$mounted_devices" | grep -q "^$block_device_basename\$"; then
         v_suitable_disks+=("$disk_id")
       fi

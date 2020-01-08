@@ -188,7 +188,7 @@ function store_os_distro_information {
 function set_distribution_data {
   v_linux_distribution="$(lsb_release --id --short)"
 
-  if [[ "$v_linux_distribution" == "Ubuntu" ]] && dpkg -s ubuntu-server 2> /dev/null | grep -q '^Status: install ok installed$'; then
+  if [[ "$v_linux_distribution" == "Ubuntu" ]] && grep -q '^Status: install ok installed$' < <(dpkg -s ubuntu-server 2> /dev/null); then
     v_linux_distribution="UbuntuServer"
   fi
 
@@ -260,11 +260,16 @@ function find_suitable_disks {
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
     block_device_basename="$(basename "$(readlink -f "$disk_id")")"
 
-    # The USB test may be redundant, due to `/dev/disk/by-id` prefixing removable devices with
-    # `usb`, however, until certain, this is kept.
+    # It's unclear if it's possible to establish with certainty what is an internal disk:
     #
-    if echo "$device_info" | grep -q '^ID_TYPE=disk$' && ! echo "$device_info" | grep -q '^ID_BUS=usb$'; then
-      if ! echo "$mounted_devices" | grep -q "^$block_device_basename\$"; then
+    # - there is no (obvious) spec around
+    # - pretty much everything has `DEVTYPE=disk`, e.g. LUKS devices
+    # - ID_TYPE is optional
+    #
+    # Therefore, it's probably best to rely on the id name, and just filter out optical devices.
+    #
+    if ! grep -q '^ID_TYPE=cd$' <<< "$device_info"; then
+      if ! grep -q "^$block_device_basename\$" <<< "$mounted_devices"; then
         v_suitable_disks+=("$disk_id")
       fi
     fi

@@ -1074,10 +1074,35 @@ function update_zed_cache_Debian {
   chroot_execute "touch /etc/zfs/zfs-list.cache/$v_rpool_name"
   chroot_execute "ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
 
-  chroot_execute "zed -F &"
-  chroot_execute "if [[ ! -s /etc/zfs/zfs-list.cache/$v_rpool_name ]]; then zfs set canmount=noauto $v_rpool_name; fi"
+  # Assumed to be present by the zedlet above, but missing.
+  # Filed issue: https://github.com/zfsonlinux/zfs/issues/9945.
+  #
+  chroot_execute "mkdir /run/lock"
 
-  if chroot /mnt bash -c "[[ ! -s /etc/zfs/zfs-list.cache/$v_rpool_name ]]"; then
+  chroot_execute "zed -F &"
+
+  # We could pool the events via `zpool events -v`, but it's much simpler to just check on the file.
+  #
+  local success=
+
+  if [[ ! -s "$c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name" ]]; then
+    # Takes around half second on a test VM.
+    #
+    chroot_execute "zfs set canmount=noauto $v_rpool_name"
+
+    SECONDS=0
+
+    while [[ $SECONDS -lt 5 ]]; do
+      if [[ -s "$c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name" ]]; then
+        success=1
+        break
+      else
+        sleep 0.25
+      fi
+    done
+  fi
+
+  if [[ $success -ne 1 ]]; then
     echo "Error: The ZFS cache hasn't been updated by ZED!"
     exit 1
   fi

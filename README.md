@@ -19,7 +19,7 @@ EFI boot is required (any modern (2011+) system will do); legacy boot is current
 
 RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot and root pools are mirrored, and the EFI partition is cloned for each disk.
 
-It's fairly easy to extend the program to support other Debian-based operating systems (any Debian, older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
+It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
 
 The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
 

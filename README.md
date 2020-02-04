@@ -8,10 +8,10 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 
 The program currently supports:
 
-- Ubuntu Desktop/Server 18.04.x (Bionic)
+- Ubuntu Desktop/Server 18.04.x
 - Linux Mint 19.x
 - Debian 10.1
-- ElementaryOS 5.1 (Hera)
+- ElementaryOS 5.1
 
 The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
 

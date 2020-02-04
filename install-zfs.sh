@@ -754,7 +754,12 @@ Proceed with the configuration as usual, then, at the partitioning stage:
     whiptail --msgbox "$dialog_message" 30 100
   fi
 
-  calamares
+  # The display is restricted only to the owner (`user`), so we need to allow any user to access
+  # it.
+  #
+  sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
+
+  DISPLAY=:0 calamares
 
   mkdir -p "$c_installed_os_data_mount_dir"
 

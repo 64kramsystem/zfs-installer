@@ -8,7 +8,7 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 
 The program currently supports:
 
-- Ubuntu Desktop/Server 18.04.x
+- Ubuntu Desktop/Server 18.04.x Live
 - Linux Mint 19.x
 - Debian 10.1
 - ElementaryOS 5.1
@@ -20,6 +20,8 @@ EFI boot is required (any modern (2011+) system will do); legacy boot is current
 RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot and root pools are mirrored, and the EFI partition is cloned for each disk.
 
 It's fairly easy to extend the program to support other Debian-based operating systems (any Debian, older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
+
+The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
 
 ## Advantages over the Ubuntu 19.10 built-in installer
 

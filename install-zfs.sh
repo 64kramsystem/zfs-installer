@@ -1075,7 +1075,7 @@ function update_zed_cache_Debian {
   chroot_execute "ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
 
   chroot_execute "zed -F &"
-  chroot_execute "[[ ! -s /etc/zfs/zfs-list.cache/$v_rpool_name ]] && zfs set canmount=noauto $v_rpool_name || true"
+  chroot_execute "if [[ ! -s /etc/zfs/zfs-list.cache/$v_rpool_name ]]; then zfs set canmount=noauto $v_rpool_name; fi"
 
   if chroot /mnt bash -c "[[ ! -s /etc/zfs/zfs-list.cache/$v_rpool_name ]]"; then
     echo "Error: The ZFS cache hasn't been updated by ZED!"

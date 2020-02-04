@@ -10,7 +10,7 @@ The program currently supports:
 
 - Ubuntu Desktop/Server 18.04.x Live
 - Linux Mint 19.x
-- Debian 10.1
+- ~~Debian 10.1 Live (desktop environment required)~~ (currently has an [issue](https://github.com/saveriomiroddi/zfs-installer/issues/56))
 - ElementaryOS 5.1
 
 The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.

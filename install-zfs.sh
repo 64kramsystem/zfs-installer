@@ -763,7 +763,10 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   #
   mount "${v_temp_volume_device}" "$c_installed_os_data_mount_dir"
 
-  chroot_execute "echo root:$(printf "%q" "$v_root_password") | chpasswd"
+  # We don't use chroot()_execute here, as it works on $c_zfs_mount_dir (which is synced on a
+  # later stage).
+  #
+  chroot "$c_installed_os_data_mount_dir" bash -c "echo root:$(printf "%q" "$v_root_password") | chpasswd"
 
   # The installer doesn't set the network interfaces, so, for convenience, we do it.
   #

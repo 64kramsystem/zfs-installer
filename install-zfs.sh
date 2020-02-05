@@ -469,7 +469,7 @@ function ask_pool_tweaks {
 function install_host_packages {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
     add-apt-repository --yes ppa:jonathonf/zfs
@@ -497,7 +497,7 @@ function install_host_packages {
 function install_host_packages_Debian {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
     echo "deb http://deb.debian.org/debian buster contrib" >> /etc/apt/sources.list

@@ -40,7 +40,7 @@ c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O d
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
 c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
-declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
@@ -469,7 +469,7 @@ function ask_pool_tweaks {
 function install_host_packages {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
     add-apt-repository --yes ppa:jonathonf/zfs
@@ -497,7 +497,7 @@ function install_host_packages {
 function install_host_packages_Debian {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
     echo "deb http://deb.debian.org/debian buster contrib" >> /etc/apt/sources.list
@@ -754,7 +754,12 @@ Proceed with the configuration as usual, then, at the partitioning stage:
     whiptail --msgbox "$dialog_message" 30 100
   fi
 
-  calamares
+  # The display is restricted only to the owner (`user`), so we need to allow any user to access
+  # it.
+  #
+  sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
+
+  DISPLAY=:0 calamares
 
   mkdir -p "$c_installed_os_data_mount_dir"
 
@@ -763,7 +768,10 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   #
   mount "${v_temp_volume_device}" "$c_installed_os_data_mount_dir"
 
-  chroot_execute "echo root:$(printf "%q" "$v_root_password") | chpasswd"
+  # We don't use chroot()_execute here, as it works on $c_zfs_mount_dir (which is synced on a
+  # later stage).
+  #
+  chroot "$c_installed_os_data_mount_dir" bash -c "echo root:$(printf "%q" "$v_root_password") | chpasswd"
 
   # The installer doesn't set the network interfaces, so, for convenience, we do it.
   #
@@ -1066,9 +1074,39 @@ function update_zed_cache_Debian {
   chroot_execute "touch /etc/zfs/zfs-list.cache/$v_rpool_name"
   chroot_execute "ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
 
+  # Assumed to be present by the zedlet above, but missing.
+  # Filed issue: https://github.com/zfsonlinux/zfs/issues/9945.
+  #
+  chroot_execute "mkdir /run/lock"
+
   chroot_execute "zed -F &"
-  chroot_execute "[[ ! -s /etc/zfs/zfs-list.cache/$v_rpool_name ]] && zfs set canmount=noauto $v_rpool_name || true"
-  chroot_execute "[[ ! -s /etc/zfs/zfs-list.cache/$v_rpool_name ]] && false"
+
+  # We could pool the events via `zpool events -v`, but it's much simpler to just check on the file.
+  #
+  local success=
+
+  if [[ ! -s "$c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name" ]]; then
+    # Takes around half second on a test VM.
+    #
+    chroot_execute "zfs set canmount=noauto $v_rpool_name"
+
+    SECONDS=0
+
+    while [[ $SECONDS -lt 5 ]]; do
+      if [[ -s "$c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name" ]]; then
+        success=1
+        break
+      else
+        sleep 0.25
+      fi
+    done
+  fi
+
+  if [[ $success -ne 1 ]]; then
+    echo "Error: The ZFS cache hasn't been updated by ZED!"
+    exit 1
+  fi
+
   chroot_execute "pkill zed"
 
   chroot_execute "sed -Ei 's|$c_installed_os_data_mount_dir/?|/|' /etc/zfs/zfs-list.cache/$v_rpool_name"

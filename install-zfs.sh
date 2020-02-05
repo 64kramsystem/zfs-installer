@@ -40,7 +40,7 @@ c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O d
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
 c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
-declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [Debian]=10 [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer

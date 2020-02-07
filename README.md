@@ -10,7 +10,7 @@ The program currently supports:
 
 - Ubuntu Desktop/Server 18.04.x Live
 - Linux Mint 19.x
-- ~~Debian 10.x Live (desktop environment required)~~ (currently has an [issue](https://github.com/saveriomiroddi/zfs-installer/issues/59))
+- Debian 10.x Live (desktop environment required)
 - ElementaryOS 5.1
 
 The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
@@ -20,6 +20,8 @@ EFI boot is required (any modern (2011+) system will do); legacy boot is current
 RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot and root pools are mirrored, and the EFI partition is cloned for each disk.
 
 It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
+
+As of Feb/2020, Debian 10.x does not install stably on Virtualbox 6.x (but works fine on VMWare 15.5). For unclear reasons, the EFI partition is not recognized unless the live CD is left in the virtual reader after the installation (!?).
 
 The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
 

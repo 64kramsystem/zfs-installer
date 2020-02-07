@@ -10,7 +10,7 @@ The program currently supports:
 
 - Ubuntu Desktop/Server 18.04.x Live
 - Linux Mint 19.x
-- ~~Debian 10.x Live (desktop environment required)~~ (currently has an [issue](https://github.com/saveriomiroddi/zfs-installer/issues/59))
+- Debian 10.x Live (desktop environment required)
 - ElementaryOS 5.1
 
 The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
@@ -21,8 +21,6 @@ RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot an
 
 It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
 
-The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
-
 ## Advantages over the Ubuntu 19.10 built-in installer
 
 Canonical released Ubuntu 19.10, with an experimental ZFS installer. The advantages of this project over the 19.10 installer are:
@@ -31,10 +29,6 @@ Canonical released Ubuntu 19.10, with an experimental ZFS installer. The advanta
 2. the experimental Ubuntu installer is unconfigurable; it generates a fixed setup.
 
 additionally, as explained in the previous section, the script can be easily adapted for other operating systems.
-
-## Status
-
-The script is in "open beta"; it's been tested on different configurations, but promoting the program to stable requires testing on a large amount of systems, as there always system-related peculiarities that need to be handled.
 
 ## Instructions
 
@@ -54,6 +48,13 @@ Ubuntu Server requires a slightly different execution procedure:
 - then type `sudo -- bash -c "$(curl -L https://git.io/JelI5)"`.
 
 the rest is the same as the generic procedure.
+
+### Issues/unsupported systems
+
+As of Feb/2020, Debian 10.x does not install stably on Virtualbox 6.x (but works fine on VMWare 15.5).  
+For unclear reasons, the EFI partition is not recognized unless the live CD is left in the virtual reader when rebooting after the installation (!).
+
+The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
 
 ### Unattended installations
 

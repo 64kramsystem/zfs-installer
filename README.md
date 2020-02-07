@@ -34,10 +34,6 @@ Canonical released Ubuntu 19.10, with an experimental ZFS installer. The advanta
 
 additionally, as explained in the previous section, the script can be easily adapted for other operating systems.
 
-## Status
-
-The script is in "open beta"; it's been tested on different configurations, but promoting the program to stable requires testing on a large amount of systems, as there always system-related peculiarities that need to be handled.
-
 ## Instructions
 
 Start the live CD of a supported Linux distribution, then open a terminal and execute:

@@ -21,10 +21,6 @@ RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot an
 
 It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
 
-As of Feb/2020, Debian 10.x does not install stably on Virtualbox 6.x (but works fine on VMWare 15.5). For unclear reasons, the EFI partition is not recognized unless the live CD is left in the virtual reader after the installation (!?).
-
-The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
-
 ## Advantages over the Ubuntu 19.10 built-in installer
 
 Canonical released Ubuntu 19.10, with an experimental ZFS installer. The advantages of this project over the 19.10 installer are:
@@ -52,6 +48,13 @@ Ubuntu Server requires a slightly different execution procedure:
 - then type `sudo -- bash -c "$(curl -L https://git.io/JelI5)"`.
 
 the rest is the same as the generic procedure.
+
+### Issues/unsupported systems
+
+As of Feb/2020, Debian 10.x does not install stably on Virtualbox 6.x (but works fine on VMWare 15.5).  
+For unclear reasons, the EFI partition is not recognized unless the live CD is left in the virtual reader when rebooting after the installation (!).
+
+The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
 
 ### Unattended installations
 

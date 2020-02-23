@@ -422,7 +422,7 @@ function ask_free_tail_space {
    local tail_space_invalid_message=
 
     while [[ ! $v_free_tail_space =~ ^[0-9]+$ ]]; do
-      v_free_tail_space=$(whiptail --inputbox "${tail_space_invalid_message}Enter the space to leave at the end of each disk (0 for none):" 30 100 0 3>&1 1>&2 2>&3)
+      v_free_tail_space=$(whiptail --inputbox "${tail_space_invalid_message}Enter the space in GiB to leave at the end of each disk (0 for none):" 30 100 0 3>&1 1>&2 2>&3)
 
       tail_space_invalid_message="Invalid size! "
     done

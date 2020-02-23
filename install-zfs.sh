@@ -49,6 +49,17 @@ c_lsb_release_log=$c_log_dir/lsb_release.log
 c_disks_log=$c_log_dir/disks.log
 c_zfs_module_version_log=$c_log_dir/updated_module_versions.log
 
+# On a system, while installing Ubuntu 18.04(.4), all the `udevadm settle` invocations timed out.
+#
+# It's not clear why this happens, so we set a large enough timeout. On systems without this issue,
+# the timeout won't matter, while on systems with the issue, the timeout will be enough to ensure
+# that the devices are created.
+#
+# Note that the strategy of continuing in any case (`|| true`) is not the best, however, the exit
+# codes are not documented.
+#
+c_udevadm_settle_timeout=10 # seconds
+
 # HELPER FUNCTIONS #############################################################
 
 # Chooses a function and invokes it depending on the O/S distribution.
@@ -255,7 +266,7 @@ function find_suitable_disks {
 
   while read -r disk_id || [[ -n "$disk_id" ]]; do
     local device_info
-    local block_device_name
+    local block_device_basename
 
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
     block_device_basename="$(basename "$(readlink -f "$disk_id")")"
@@ -307,6 +318,7 @@ function select_disks {
   else
     while true; do
       local menu_entries_option=()
+      local block_device_basename
 
       if [[ ${#v_suitable_disks[@]} -eq 1 ]]; then
         local disk_selection_status=ON
@@ -315,6 +327,7 @@ function select_disks {
       fi
 
       for disk_id in "${v_suitable_disks[@]}"; do
+        block_device_basename="$(basename "$(readlink -f "$disk_id")")"
         menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
       done
 
@@ -409,7 +422,7 @@ function ask_free_tail_space {
    local tail_space_invalid_message=
 
     while [[ ! $v_free_tail_space =~ ^[0-9]+$ ]]; do
-      v_free_tail_space=$(whiptail --inputbox "${tail_space_invalid_message}Enter the space to leave at the end of each disk (0 for none):" 30 100 0 3>&1 1>&2 2>&3)
+      v_free_tail_space=$(whiptail --inputbox "${tail_space_invalid_message}Enter the space in GiB to leave at the end of each disk (0 for none):" 30 100 0 3>&1 1>&2 2>&3)
 
       tail_space_invalid_message="Invalid size! "
     done
@@ -586,7 +599,7 @@ function prepare_disks {
   #
   # Current attempt: `udevadm`, which should be the cleanest approach.
   #
-  udevadm settle
+  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
 
   # for disk in "${v_selected_disks[@]}"; do
   #   part_indexes=(1 2 3)
@@ -666,13 +679,13 @@ function create_temp_volume {
   # The volume may not be immediately available; for reference, "/dev/zvol/.../os-install-temp"
   # is a standard file, which turns into symlink once the volume is available. See #8.
   #
-  udevadm settle
+  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
 
   v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
 
   sgdisk -n1:0:0 -t1:8300 "$v_temp_volume_device"
 
-  udevadm settle
+  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
 }
 
 # Differently from Ubuntu, the installer (Calamares) requires a filesystem to be ready.
@@ -693,7 +706,7 @@ function create_temp_volume_UbuntuServer {
 
   zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
 
-  udevadm settle
+  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
 
   v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
 }

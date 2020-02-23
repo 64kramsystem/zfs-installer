@@ -255,7 +255,7 @@ function find_suitable_disks {
 
   while read -r disk_id || [[ -n "$disk_id" ]]; do
     local device_info
-    local block_device_name
+    local block_device_basename
 
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
     block_device_basename="$(basename "$(readlink -f "$disk_id")")"
@@ -307,6 +307,7 @@ function select_disks {
   else
     while true; do
       local menu_entries_option=()
+      local block_device_basename
 
       if [[ ${#v_suitable_disks[@]} -eq 1 ]]; then
         local disk_selection_status=ON
@@ -315,6 +316,7 @@ function select_disks {
       fi
 
       for disk_id in "${v_suitable_disks[@]}"; do
+        block_device_basename="$(basename "$(readlink -f "$disk_id")")"
         menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
       done
 

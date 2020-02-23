@@ -49,6 +49,17 @@ c_lsb_release_log=$c_log_dir/lsb_release.log
 c_disks_log=$c_log_dir/disks.log
 c_zfs_module_version_log=$c_log_dir/updated_module_versions.log
 
+# On a system, while installing Ubuntu 18.04(.4), all the `udevadm settle` invocations timed out.
+#
+# It's not clear why this happens, so we set a large enough timeout. On systems without this issue,
+# the timeout won't matter, while on systems with the issue, the timeout will be enough to ensure
+# that the devices are created.
+#
+# Note that the strategy of continuing in any case (`|| true`) is not the best, however, the exit
+# codes are not documented.
+#
+c_udevadm_settle_timeout=10 # seconds
+
 # HELPER FUNCTIONS #############################################################
 
 # Chooses a function and invokes it depending on the O/S distribution.
@@ -588,7 +599,7 @@ function prepare_disks {
   #
   # Current attempt: `udevadm`, which should be the cleanest approach.
   #
-  udevadm settle
+  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
 
   # for disk in "${v_selected_disks[@]}"; do
   #   part_indexes=(1 2 3)
@@ -668,13 +679,13 @@ function create_temp_volume {
   # The volume may not be immediately available; for reference, "/dev/zvol/.../os-install-temp"
   # is a standard file, which turns into symlink once the volume is available. See #8.
   #
-  udevadm settle
+  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
 
   v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
 
   sgdisk -n1:0:0 -t1:8300 "$v_temp_volume_device"
 
-  udevadm settle
+  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
 }
 
 # Differently from Ubuntu, the installer (Calamares) requires a filesystem to be ready.
@@ -695,7 +706,7 @@ function create_temp_volume_UbuntuServer {
 
   zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
 
-  udevadm settle
+  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
 
   v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
 }

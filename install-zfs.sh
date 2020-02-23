@@ -255,7 +255,7 @@ function find_suitable_disks {
 
   while read -r disk_id || [[ -n "$disk_id" ]]; do
     local device_info
-    local block_device_name
+    local block_device_basename
 
     device_info="$(udevadm info --query=property "$(readlink -f "$disk_id")")"
     block_device_basename="$(basename "$(readlink -f "$disk_id")")"

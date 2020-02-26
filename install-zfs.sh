@@ -731,7 +731,7 @@ Proceed with the configuration as usual, then, at the partitioning stage:
     whiptail --msgbox "$dialog_message" 30 100
   fi
 
-  ubiquity --no-bootloader
+  DISPLAY=:0 ubiquity --no-bootloader
 
   swapoff -a
 

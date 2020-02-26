@@ -1028,8 +1028,6 @@ function install_and_configure_bootloader {
   # performed on 18.04, but it's better to keep this reference just in case.
 
   chroot_execute "update-grub"
-
-  chroot_execute "umount /boot/efi"
 }
 
 function install_and_configure_bootloader_Debian {
@@ -1047,17 +1045,27 @@ function install_and_configure_bootloader_Debian {
   chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                         /etc/default/grub"
 
   chroot_execute "update-grub"
-
-  chroot_execute "umount /boot/efi"
 }
 
-function clone_efi_partition {
+function sync_efi_partitions {
   print_step_info_header
 
   for ((i = 1; i < ${#v_selected_disks[@]}; i++)); do
-    dd if="${v_selected_disks[0]}-part1" of="${v_selected_disks[i]}-part1"
+    local synced_efi_partition_path="/boot/efi$((i + 1))"
+
+    chroot_execute "echo PARTUUID=$(blkid -s PARTUUID -o value "${v_selected_disks[i]}-part1") $synced_efi_partition_path vfat nofail,x-systemd.device-timeout=1 0 1 >> /etc/fstab"
+
+    chroot_execute "mkdir -p $synced_efi_partition_path"
+    chroot_execute "mount $synced_efi_partition_path"
+
+    chroot_execute "rsync --archive --delete --verbose /boot/efi/ $synced_efi_partition_path"
+
     efibootmgr --create --disk "${v_selected_disks[i]}" --label "ubuntu-$((i + 1))" --loader '\EFI\ubuntu\grubx64.efi'
+
+    chroot_execute "umount $synced_efi_partition_path"
   done
+
+  chroot_execute "umount /boot/efi"
 }
 
 function configure_boot_pool_import {
@@ -1221,7 +1229,7 @@ fi
 
 distro_dependent_invoke "install_jail_zfs_packages"
 distro_dependent_invoke "install_and_configure_bootloader"
-clone_efi_partition
+sync_efi_partitions
 configure_boot_pool_import
 distro_dependent_invoke "update_zed_cache" --noforce
 configure_remaining_settings

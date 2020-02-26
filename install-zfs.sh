@@ -731,7 +731,12 @@ Proceed with the configuration as usual, then, at the partitioning stage:
     whiptail --msgbox "$dialog_message" 30 100
   fi
 
-  ubiquity --no-bootloader
+  # The display is restricted only to the owner (`user`), so we need to allow any user to access
+  # it.
+  #
+  sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
+
+  DISPLAY=:0 ubiquity --no-bootloader
 
   swapoff -a
 
@@ -767,8 +772,7 @@ Proceed with the configuration as usual, then, at the partitioning stage:
     whiptail --msgbox "$dialog_message" 30 100
   fi
 
-  # The display is restricted only to the owner (`user`), so we need to allow any user to access
-  # it.
+  # See install_operating_system().
   #
   sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
 

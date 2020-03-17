@@ -846,13 +846,17 @@ DIFF
 
   patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/subiquity/ui/views/installprogress.py" << 'DIFF'
 diff lib/python3.6/site-packages/subiquity/ui/views/installprogress.py{.bak,}
-122,125c122
-<         if include_exit:
-<             btns = [self.view_log_btn, self.exit_btn, self.reboot_btn]
-<         else:
-<             btns = [self.view_log_btn, self.reboot_btn]
+47a48,49
+>         self.exit_btn = cancel_btn(
+>             _("Exit To Shell"), on_press=self.quit)
+121c123
+<         btns = [self.view_log_btn, self.reboot_btn]
 ---
 >         btns = [self.view_log_btn, self.exit_btn, self.reboot_btn]
+133a136,138
+>     def quit(self, btn):
+>         self.controller.quit()
+> 
 DIFF
 
   snap stop subiquity

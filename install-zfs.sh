@@ -261,7 +261,7 @@ function find_suitable_disks {
   # Iterating via here-string generates an empty line when no devices are found. The options are
   # either using this strategy, or adding a conditional.
   #
-  candidate_disk_ids=$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi)-.+' -not -regex '.+-part[0-9]+$' | sort)
+  candidate_disk_ids=$(find /dev/disk/by-id -regextype awk -regex '.+/(ata|nvme|scsi|mmc)-.+' -not -regex '.+-part[0-9]+$' | sort)
   mounted_devices="$(df | awk 'BEGIN {getline} {print $1}' | xargs -n 1 lsblk -no pkname 2> /dev/null | sort -u || true)"
 
   while read -r disk_id || [[ -n "$disk_id" ]]; do

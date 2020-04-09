@@ -579,7 +579,7 @@ function prepare_disks {
 
     sgdisk -n1:1M:+"$c_boot_partition_size" -t1:EF00 "$selected_disk" # EFI boot
     sgdisk -n2:0:+"$c_boot_partition_size"  -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:"$tail_space_parameter" -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n3:0:"$tail_space_parameter"    -t3:BF01 "$selected_disk" # Root pool
   done
 
   # The partition symlinks are not immediately created, so we wait.

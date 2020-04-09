@@ -41,6 +41,7 @@ c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
 c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
+c_boot_partition_size=512M
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
@@ -576,8 +577,8 @@ function prepare_disks {
     #
     wipefs --all "$selected_disk"
 
-    sgdisk -n1:1M:+512M                  -t1:EF00 "$selected_disk" # EFI boot
-    sgdisk -n2:0:+512M                   -t2:BF01 "$selected_disk" # Boot pool
+    sgdisk -n1:1M:+"$c_boot_partition_size" -t1:EF00 "$selected_disk" # EFI boot
+    sgdisk -n2:0:+"$c_boot_partition_size"  -t2:BF01 "$selected_disk" # Boot pool
     sgdisk -n3:0:"$tail_space_parameter" -t3:BF01 "$selected_disk" # Root pool
   done
 

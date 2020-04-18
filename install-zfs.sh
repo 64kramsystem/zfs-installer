@@ -332,7 +332,7 @@ function select_disks {
         menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
       done
 
-      local dialog_message="Select the ZFS devices (couple devices would create a mirror, more than two selections will be in raidz).
+      local dialog_message="Select the ZFS devices (couple devices would create mirror pools, more than two selections will create mirror for small bpool and raidz for main rpool).
 
 Devices with mounted partitions, cdroms, and removable devices are not displayed!
 "
@@ -630,11 +630,14 @@ function prepare_disks {
   done
 
   if [[ ${#v_selected_disks[@]} -gt 2 ]]; then
-    local pools_raid_option=raidz
+    local rpool_raid_option=raidz
+    local bpool_raid_option=mirror
   elif [[ ${#v_selected_disks[@]} -eq 2 ]]; then
-    local pools_raid_option=mirror
+    local rpool_raid_option=mirror
+    local bpool_raid_option=mirror
   else
-    local pools_raid_option=
+    local rpool_raid_option=
+    local bpool_raid_option=
   fi
 
   # POOLS CREATION #####################
@@ -652,7 +655,7 @@ function prepare_disks {
     "${encryption_options[@]}" \
     $v_rpool_tweaks \
     -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
-    "$v_rpool_name" $pools_raid_option "${rpool_disks_partitions[@]}"
+    "$v_rpool_name" $rpool_raid_option "${rpool_disks_partitions[@]}"
 
   # `-d` disable all the pool features (not used here);
   #
@@ -660,7 +663,7 @@ function prepare_disks {
   zpool create \
     $v_bpool_tweaks \
     -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
-    "$v_bpool_name" $pools_raid_option "${bpool_disks_partitions[@]}"
+    "$v_bpool_name" $bpool_raid_option "${bpool_disks_partitions[@]}"
 
   # SWAP ###############################
 

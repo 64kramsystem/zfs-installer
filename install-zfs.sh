@@ -763,7 +763,7 @@ function install_operating_system_Debian {
 Proceed with the configuration as usual, then, at the partitioning stage:
 
 - check `Manual partitioning` -> `Next`
-- set `Storage device` to `Unknown - 10.0 GB '"${v_temp_volume_device}"'`
+- set `Storage device` to `Unknown - 12.0 GB '"${v_temp_volume_device}"'`
 - click on `'"${v_temp_volume_device}"'` in the filesystems panel -> `Edit`
   - set `Mount Point` to `/` -> `OK`
 - `Next`

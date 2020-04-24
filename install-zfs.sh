@@ -1254,7 +1254,7 @@ if [[ $# -ne 0 ]]; then
 fi
 
 activate_debug
-store_os_distro_information
+distro_dependent_invoke "store_os_distro_information"
 set_distribution_data
 check_prerequisites
 display_intro_banner

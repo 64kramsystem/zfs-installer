@@ -46,7 +46,7 @@ c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
-c_lsb_release_log=$c_log_dir/lsb_release.log
+c_os_information_log=$c_log_dir/os_information.log
 c_disks_log=$c_log_dir/disks.log
 c_zfs_module_version_log=$c_log_dir/updated_module_versions.log
 
@@ -191,12 +191,6 @@ function activate_debug {
   set -x
 }
 
-function store_os_distro_information {
-  print_step_info_header
-
-  lsb_release --all > "$c_lsb_release_log"
-}
-
 function set_distribution_data {
   v_linux_distribution="$(lsb_release --id --short)"
 
@@ -205,6 +199,23 @@ function set_distribution_data {
   fi
 
   v_linux_version="$(lsb_release --release --short)"
+}
+
+function store_os_distro_information {
+  print_step_info_header
+
+  lsb_release --all > "$c_os_information_log"
+
+  # Madness, in order not to force the user to invoke "sudo -E".
+  # Assumes that the user runs exactly `sudo bash`; it's not a (current) concern if the user runs off specification.
+  #
+  perl -lne 'BEGIN { $/ = "\0" } print if /^XDG_CURRENT_DESKTOP=/' /proc/"$PPID"/environ >> "$c_os_information_log"
+}
+
+function store_os_distro_information_Debian {
+  store_os_distro_information
+
+  echo "DEBIAN_VERSION=$(cat /etc/debian_version)" >> "$c_os_information_log"
 }
 
 function check_prerequisites {
@@ -1249,8 +1260,8 @@ if [[ $# -ne 0 ]]; then
 fi
 
 activate_debug
-store_os_distro_information
 set_distribution_data
+distro_dependent_invoke "store_os_distro_information"
 check_prerequisites
 display_intro_banner
 find_suitable_disks

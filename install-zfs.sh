@@ -646,11 +646,13 @@ function prepare_disks {
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
   # shellcheck disable=SC2086 # unquoted tweaks variable (splitting is expected)
+  set +x
   echo -n "$v_passphrase" | zpool create \
     "${encryption_options[@]}" \
     $v_rpool_tweaks \
     -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
     "$v_rpool_name" $pools_mirror_option "${rpool_disks_partitions[@]}"
+  set -x
 
   # `-d` disable all the pool features (not used here);
   #
@@ -789,7 +791,9 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   # We don't use chroot()_execute here, as it works on $c_zfs_mount_dir (which is synced on a
   # later stage).
   #
+  set +x
   chroot "$c_installed_os_data_mount_dir" bash -c "echo root:$(printf "%q" "$v_root_password") | chpasswd"
+  set -x
 
   # The installer doesn't set the network interfaces, so, for convenience, we do it.
   #

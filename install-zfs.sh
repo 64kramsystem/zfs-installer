@@ -758,12 +758,16 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 function install_operating_system_Debian {
   print_step_info_header
 
+  # The temporary volume size displayed is an approximation of the format used by the installer,
+  # but it's acceptable - the complexity required is not worth (eg. converting hypothetical units,
+  # etc.).
+  #
   local dialog_message='The Debian GUI installer will now be launched.
 
 Proceed with the configuration as usual, then, at the partitioning stage:
 
 - check `Manual partitioning` -> `Next`
-- set `Storage device` to `Unknown - 10.0 GB '"${v_temp_volume_device}"'`
+- set `Storage device` to `Unknown - '"${c_temporary_volume_size}"' '"${v_temp_volume_device}"'`
 - click on `'"${v_temp_volume_device}"'` in the filesystems panel -> `Edit`
   - set `Mount Point` to `/` -> `OK`
 - `Next`

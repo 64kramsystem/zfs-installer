@@ -195,6 +195,11 @@ function store_os_distro_information {
   print_step_info_header
 
   lsb_release --all > "$c_os_information_log"
+
+  # Madness, in order not to force the user to invoke "sudo -E".
+  # Assumes that the user runs exactly `sudo bash`; it's not a (current) concern if the user runs off specification.
+  #
+  perl -lne 'BEGIN { $/ = "\0" } print if /^XDG_CURRENT_DESKTOP=/' /proc/"$PPID"/environ >> "$c_os_information_log"
 }
 
 function set_distribution_data {

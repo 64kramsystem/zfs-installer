@@ -202,6 +202,12 @@ function store_os_distro_information {
   perl -lne 'BEGIN { $/ = "\0" } print if /^XDG_CURRENT_DESKTOP=/' /proc/"$PPID"/environ >> "$c_os_information_log"
 }
 
+function store_os_distro_information_Debian {
+  store_os_distro_information
+
+  echo "DEBIAN_VERSION=$(cat /etc/debian_version)" >> "$c_os_information_log"
+}
+
 function set_distribution_data {
   v_linux_distribution="$(lsb_release --id --short)"
 

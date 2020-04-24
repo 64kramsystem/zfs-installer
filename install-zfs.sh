@@ -191,6 +191,16 @@ function activate_debug {
   set -x
 }
 
+function set_distribution_data {
+  v_linux_distribution="$(lsb_release --id --short)"
+
+  if [[ "$v_linux_distribution" == "Ubuntu" ]] && grep -q '^Status: install ok installed$' < <(dpkg -s ubuntu-server 2> /dev/null); then
+    v_linux_distribution="UbuntuServer"
+  fi
+
+  v_linux_version="$(lsb_release --release --short)"
+}
+
 function store_os_distro_information {
   print_step_info_header
 
@@ -206,16 +216,6 @@ function store_os_distro_information_Debian {
   store_os_distro_information
 
   echo "DEBIAN_VERSION=$(cat /etc/debian_version)" >> "$c_os_information_log"
-}
-
-function set_distribution_data {
-  v_linux_distribution="$(lsb_release --id --short)"
-
-  if [[ "$v_linux_distribution" == "Ubuntu" ]] && grep -q '^Status: install ok installed$' < <(dpkg -s ubuntu-server 2> /dev/null); then
-    v_linux_distribution="UbuntuServer"
-  fi
-
-  v_linux_version="$(lsb_release --release --short)"
 }
 
 function check_prerequisites {
@@ -1260,8 +1260,8 @@ if [[ $# -ne 0 ]]; then
 fi
 
 activate_debug
-distro_dependent_invoke "store_os_distro_information"
 set_distribution_data
+distro_dependent_invoke "store_os_distro_information"
 check_prerequisites
 display_intro_banner
 find_suitable_disks

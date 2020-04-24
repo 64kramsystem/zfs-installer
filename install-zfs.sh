@@ -16,14 +16,14 @@ set -o nounset
 # Variables set (indirectly) by the user
 
 v_bpool_name=
-v_bpool_tweaks=              # see defaults below for format
+v_bpool_tweaks=              # array; see defaults below for format
 v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
 v_linux_distribution_version=
 v_encrypt_rpool=             # 0=false, 1=true
 v_passphrase=
 v_root_password=             # Debian-only
 v_rpool_name=
-v_rpool_tweaks=              # see defaults below for format
+v_rpool_tweaks=              # array; see defaults below for format
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
@@ -477,15 +477,15 @@ function ask_pool_tweaks {
   print_step_info_header
 
   if [[ ${ZFS_BPOOL_TWEAKS:-} != "" ]]; then
-    v_bpool_tweaks=$ZFS_BPOOL_TWEAKS
+    mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$ZFS_BPOOL_TWEAKS")
   else
-    v_bpool_tweaks=$(whiptail --inputbox "Insert the tweaks for the boot pool" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)
+    mapfile -t v_bpool_tweaks < <(whiptail --inputbox "Insert the tweaks for the boot pool" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)
   fi
 
   if [[ ${ZFS_RPOOL_TWEAKS:-} != "" ]]; then
-    v_rpool_tweaks=$ZFS_RPOOL_TWEAKS
+    mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$ZFS_RPOOL_TWEAKS")
   else
-    v_rpool_tweaks=$(whiptail --inputbox "Insert the tweaks for the root pool" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)
+    mapfile -t v_rpool_tweaks < <(whiptail --inputbox "Insert the tweaks for the root pool" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)
   fi
 
   print_variables v_bpool_tweaks v_rpool_tweaks
@@ -656,20 +656,18 @@ function prepare_disks {
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
-  # shellcheck disable=SC2086 # unquoted tweaks variable (splitting is expected)
   set +x
   echo -n "$v_passphrase" | zpool create \
     "${encryption_options[@]}" \
-    $v_rpool_tweaks \
+    "${v_rpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
     "$v_rpool_name" $pools_mirror_option "${rpool_disks_partitions[@]}"
   set -x
 
   # `-d` disable all the pool features (not used here);
   #
-  # shellcheck disable=SC2086 # see previous command
   zpool create \
-    $v_bpool_tweaks \
+    "${v_bpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
     "$v_bpool_name" $pools_mirror_option "${bpool_disks_partitions[@]}"
 

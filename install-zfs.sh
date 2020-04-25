@@ -16,6 +16,7 @@ set -o nounset
 # Variables set by the script
 
 v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
+v_zfs_08_in_repository=      # 1=true, false otherwise (applies only to Ubuntu-based)
 
 # Variables set (indirectly) by the user
 
@@ -324,6 +325,40 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
   print_variables v_suitable_disks
 }
 
+# There are three parameters:
+#
+# 1. the tools are preinstalled (ie. Ubuntu Desktop based);
+# 2. the default repository supports ZFS 0.8 (ie. Ubuntu 20.04+ based);
+# 3. the distro provides the precompiled ZFS module (i.e. Ubuntu based, not Debian)
+#
+# Fortunately, with Debian-specific logic isolated, we need conditionals based only on #2 - see
+# install_host_packages() and install_host_packages_UbuntuServer().
+#
+function find_zfs_package_requirements {
+  print_step_info_header
+
+  # WATCH OUT. This is assumed by code in later functions.
+  #
+  apt update
+
+  local zfs_package_version
+  zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print $1 if /^Version: (\d+\.\d+)\./')
+
+  if [[ -n $zfs_package_version ]]; then
+    if [[ ! $zfs_package_version =~ ^0\. ]]; then
+      >&2 echo "Unsupported ZFS version!: $zfs_package_version"
+      exit 1
+    elif (( $(echo "$zfs_package_version" | cut -d. -f2) >= 8 )); then
+      v_zfs_08_in_repository=1
+    fi
+  fi
+}
+
+function find_zfs_package_requirements_Debian {
+  # Do nothing - ZFS packages are handled in a specific way.
+  :
+}
+
 function select_disks {
   print_step_info_header
 
@@ -493,25 +528,21 @@ function install_host_packages {
   print_step_info_header
 
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
-    echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
+    if [[ $v_zfs_08_in_repository != "1" ]]; then
+      add-apt-repository --yes ppa:jonathonf/zfs
+      apt update
 
-    add-apt-repository --yes ppa:jonathonf/zfs
+      # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
+      # Module compilation log: `/var/lib/dkms/zfs/0.8.2/build/make.log` (adjust according to version).
+      #
+      echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
+      apt install --yes libelf-dev zfs-dkms
 
-    # Required only on LinuxMint, which doesn't update the apt data when invoking `add-apt-repository`.
-    # With the current design, it's arguably preferrable to introduce a redundant operation (for
-    # Ubuntu), rather than adding an almost entirely duplicated function.
-    #
-    apt update
-
-    # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
-    # Module compilation log: `/var/lib/dkms/zfs/0.8.2/build/make.log` (adjust according to version).
-    #
-    apt install --yes libelf-dev zfs-dkms
-
-    systemctl stop zfs-zed
-    modprobe -r zfs
-    modprobe zfs
-    systemctl start zfs-zed
+      systemctl stop zfs-zed
+      modprobe -r zfs
+      modprobe zfs
+      systemctl start zfs-zed
+    fi
   fi
 
   zfs --version > "$c_zfs_module_version_log" 2>&1
@@ -565,6 +596,10 @@ function install_host_packages_UbuntuServer {
     #
     apt update
     apt install -y "linux-headers-$(uname -r)" efibootmgr
+
+    if [[ $v_zfs_08_in_repository == "1" ]]; then
+      apt install --yes zfsutils-linux zfs-modules
+    fi
   fi
 
   install_host_packages
@@ -1261,6 +1296,7 @@ distro_dependent_invoke "store_os_distro_information"
 check_prerequisites
 display_intro_banner
 find_suitable_disks
+find_zfs_package_requirements
 
 select_disks
 distro_dependent_invoke "ask_root_password" --noforce

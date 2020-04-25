@@ -478,17 +478,13 @@ function ask_pool_names {
 function ask_pool_tweaks {
   print_step_info_header
 
-  if [[ ${ZFS_BPOOL_TWEAKS:-} != "" ]]; then
-    mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$ZFS_BPOOL_TWEAKS")
-  else
-    mapfile -d' ' -t v_bpool_tweaks < <(whiptail --inputbox "Insert the tweaks for the boot pool" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)
-  fi
+  local raw_bpool_tweaks=${ZFS_BPOOL_TWEAKS:-$(whiptail --inputbox "Insert the tweaks for the boot pool" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)}
 
-  if [[ ${ZFS_RPOOL_TWEAKS:-} != "" ]]; then
-    mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$ZFS_RPOOL_TWEAKS")
-  else
-    mapfile -d' ' -t v_rpool_tweaks < <(whiptail --inputbox "Insert the tweaks for the root pool" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)
-  fi
+  mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$raw_bpool_tweaks")
+
+  local raw_rpool_tweaks=${ZFS_RPOOL_TWEAKS:-$(whiptail --inputbox "Insert the tweaks for the root pool" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)}
+
+  mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$raw_rpool_tweaks")
 
   print_variables v_bpool_tweaks v_rpool_tweaks
 }

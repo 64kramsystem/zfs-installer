@@ -30,17 +30,7 @@ It's fairly easy to extend the program to support other Debian-based operating s
 
 ### Ubuntu (Desktop) 20.04 support
 
-The script internally supports Ubuntu 20.04 installations, however, Ubiquity (the Ubuntu Desktop installer) [has an issue](https://bugs.launchpad.net/ubuntu/+source/ubiquity/+bug/1875045) that makes it impossible to prepare ZFS pools ahead of time, which is a requirement for the ZFS installer to work.
-
-Canonical has shown a lack of consideration for power users/developers, in the (S)Ubiquity department:
-
-- Subiquity removed support for virtual devices (Ubiquity has it): see [bug](https://bugs.launchpad.net/subiquity/+bug/1811037);
-- the Ubuntu Server live CD prevents the user from manually launching the installer, and the installer doesn't allow the user to open a terminal;
-- the mentioned issue prevents users from managing their own ZFS partitions when installing the O/S.
-
-As a consequence, it's hard to predict future developments; the best possible strategy is currently to join to the [20.04 bug in the bug tracker](https://bugs.launchpad.net/ubuntu/+source/ubiquity/+bug/1875045).
-
-With this in mind, power users can still use the ZFS installer in all the cases, by providing a custom script (via `$ZFS_OS_INSTALLATION_SCRIPT`) that uses `debootstrap` to perform the installation.
+The support is coming soon, due to [an Ubiquity issue](https://bugs.launchpad.net/ubuntu/+source/ubiquity/+bug/1875045).
 
 ## Advantages over the Ubuntu built-in installer
 

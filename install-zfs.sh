@@ -13,12 +13,14 @@ set -o nounset
 
 # VARIABLES/CONSTANTS ##########################################################
 
+# Variables set by the script
+
+v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
+
 # Variables set (indirectly) by the user
 
 v_bpool_name=
 v_bpool_tweaks=              # array; see defaults below for format
-v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
-v_linux_distribution_version=
 v_encrypt_rpool=             # 0=false, 1=true
 v_passphrase=
 v_root_password=             # Debian-only

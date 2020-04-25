@@ -42,9 +42,9 @@ As a consequence, it's hard to predict future developments; the best possible st
 
 With this in mind, power users can still use the ZFS installer in all the cases, by providing a custom script (via `$ZFS_OS_INSTALLATION_SCRIPT`) that uses `debootstrap` to perform the installation.
 
-## Advantages over the Ubuntu 19.10 built-in installer
+## Advantages over the Ubuntu built-in installer
 
-Canonical released Ubuntu 19.10, with an experimental ZFS installer. The advantages of this project over the 19.10 installer are:
+With Ubuntu 19.10, Canonical released an experimental ZFS installer. The advantages of this project over this installer are:
 
 1. on production systems, it's undesirable to use a non-LTS version;
 2. the experimental Ubuntu installer is unconfigurable; it generates a fixed setup.

@@ -481,13 +481,13 @@ function ask_pool_tweaks {
   if [[ ${ZFS_BPOOL_TWEAKS:-} != "" ]]; then
     mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$ZFS_BPOOL_TWEAKS")
   else
-    mapfile -t v_bpool_tweaks < <(whiptail --inputbox "Insert the tweaks for the boot pool" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)
+    mapfile -d' ' -t v_bpool_tweaks < <(whiptail --inputbox "Insert the tweaks for the boot pool" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)
   fi
 
   if [[ ${ZFS_RPOOL_TWEAKS:-} != "" ]]; then
     mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$ZFS_RPOOL_TWEAKS")
   else
-    mapfile -t v_rpool_tweaks < <(whiptail --inputbox "Insert the tweaks for the root pool" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)
+    mapfile -d' ' -t v_rpool_tweaks < <(whiptail --inputbox "Insert the tweaks for the root pool" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)
   fi
 
   print_variables v_bpool_tweaks v_rpool_tweaks

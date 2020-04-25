@@ -43,7 +43,7 @@ c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O d
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
 c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
-declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
 c_boot_partition_size=768M   # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
@@ -782,6 +782,32 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   # it.
   #
   sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
+
+  # Damn Ubiquity. Workaround what it appears to be the export of all the pool as Ubiquity starts.
+  # See https://bugs.launchpad.net/ubuntu/+source/ubiquity/+bug/1875045.
+  #
+  # The pool are exported quite quickly, so, defensively, we don't check for more than a few
+  # seconds, in case the issue is resolved.
+  #
+  # In theory, this this should go into a separate function, but it's too much duplication.
+  #
+  if [[ "$v_linux_distribution $v_linux_version" == "Ubuntu 20.04" ]]; then
+    local export_timeout=5 # seconds
+    local escaped_mount_dir=$(printf "%q" "$c_zfs_mount_dir")
+
+    bash << SH &
+    SECONDS=0
+
+    while (( SECONDS < $export_timeout )); do
+      if [[ \$(zpool list -H) == "" ]]; then
+        zpool import -R $escaped_mount_dir rpool
+        zpool import -R $escaped_mount_dir bpool
+
+        break
+      fi
+    done
+SH
+  fi
 
   DISPLAY=:0 ubiquity --no-bootloader
 

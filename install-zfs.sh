@@ -22,8 +22,7 @@ v_zfs_08_in_repository=      # 1=true, false otherwise (applies only to Ubuntu-b
 
 v_bpool_name=
 v_bpool_tweaks=              # array; see defaults below for format
-v_encrypt_rpool=             # 0=false, 1=true
-v_passphrase=
+v_passphrase=                # the corresponding var (ZFS_PASSPHRASE) has special behavior (see below)
 v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_tweaks=              # array; see defaults below for format
@@ -160,7 +159,7 @@ The procedure can be entirely automated via environment variables:
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
 - ZFS_ENCRYPT_RPOOL          : set 1 to encrypt the pool
-- ZFS_PASSPHRASE
+- ZFS_PASSPHRASE             : set non-blank to encrypt the pool, and blank not to. if unset, it will be asked.
 - ZFS_DEBIAN_ROOT_PASSWORD
 - ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
@@ -418,29 +417,32 @@ function ask_root_password_Debian {
 function ask_encryption {
   print_step_info_header
 
-  if [[ "${ZFS_ENCRYPT_RPOOL:-}" == "" ]]; then
-    if whiptail --yesno 'Do you want to encrypt the root pool?' 30 100; then
-      v_encrypt_rpool=1
-    fi
-  elif [[ "${ZFS_ENCRYPT_RPOOL:-}" != "0" ]]; then
-    v_encrypt_rpool=1
-  fi
   set +x
-  if [[ $v_encrypt_rpool == "1" ]]; then
-    if [[ ${ZFS_PASSPHRASE:-} != "" ]]; then
-      v_passphrase="$ZFS_PASSPHRASE"
-    else
-      local passphrase_invalid_message=
-      local passphrase_repeat=-
 
-      while [[ "$v_passphrase" != "$passphrase_repeat" || ${#v_passphrase} -lt 8 ]]; do
-        v_passphrase=$(whiptail --passwordbox "${passphrase_invalid_message}Please enter the passphrase (8 chars min.):" 30 100 3>&1 1>&2 2>&3)
-        passphrase_repeat=$(whiptail --passwordbox "Please repeat the passphrase:" 30 100 3>&1 1>&2 2>&3)
+  if [[ -v ZFS_PASSPHRASE ]]; then
+    v_passphrase=$ZFS_PASSPHRASE
+  else
+    local passphrase_repeat=_
+    local passphrase_invalid_message=
 
-        passphrase_invalid_message="Passphrase too short, or not matching! "
-      done
-    fi
+    while [[ $v_passphrase != "$passphrase_repeat" || ${#v_passphrase} -lt 8 ]]; do
+      local dialog_message="${passphrase_invalid_message}Please enter the passphrase (8 chars min.):
+
+Leave blank to keep encryption disabled.
+"
+
+      v_passphrase=$(whiptail --passwordbox "$dialog_message" 30 100 3>&1 1>&2 2>&3)
+
+      if [[ -z $v_passphrase ]]; then
+        break
+      fi
+
+      passphrase_repeat=$(whiptail --passwordbox "Please repeat the passphrase:" 30 100 3>&1 1>&2 2>&3)
+
+      passphrase_invalid_message="Passphrase too short, or not matching! "
+    done
   fi
+
   set -x
 }
 
@@ -664,9 +666,13 @@ function prepare_disks {
   local rpool_disks_partitions=()
   local bpool_disks_partitions=()
 
-  if [[ $v_encrypt_rpool == "1" ]]; then
+  set +x
+
+  if [[ -n $v_passphrase ]]; then
     encryption_options=(-O "encryption=on" -O "keylocation=prompt" -O "keyformat=passphrase")
   fi
+
+  set -x
 
   for selected_disk in "${v_selected_disks[@]}"; do
     rpool_disks_partitions+=("${selected_disk}-part3")

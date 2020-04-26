@@ -923,8 +923,6 @@ function sync_os_temp_installation_dir_to_rpool {
 function remove_temp_partition_and_expand_rpool {
   print_step_info_header
 
-  parted -s "${v_selected_disks[0]}" rm 4
-
   if [[ $v_free_tail_space -eq 0 ]]; then
     local resize_reference=100%
   else
@@ -932,6 +930,7 @@ function remove_temp_partition_and_expand_rpool {
   fi
 
   for selected_disk in "${v_selected_disks[@]}"; do
+    parted -s "$selected_disk" rm 4
     parted -s "$selected_disk" unit s resizepart 3 -- "$resize_reference"
     zpool online -e "$v_rpool_name" "$selected_disk-part3"
   done

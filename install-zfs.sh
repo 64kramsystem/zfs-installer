@@ -580,7 +580,7 @@ function install_host_packages_Debian {
 function install_host_packages_elementary {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     apt update
     apt install -y software-properties-common
   fi
@@ -591,7 +591,7 @@ function install_host_packages_elementary {
 function install_host_packages_UbuntuServer {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     # On Ubuntu Server, `/lib/modules` is a SquashFS mount, which is read-only.
     #
     cp -R /lib/modules /tmp/

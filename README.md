@@ -62,6 +62,8 @@ the rest is the same as the generic procedure.
 
 ### Issues/unsupported systems
 
+Due to a current problem with the zpool expansion, 12 GiB of empty space are left at the end of each disk.
+
 The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
 
 ### Unattended installations

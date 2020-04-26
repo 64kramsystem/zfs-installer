@@ -925,7 +925,14 @@ function remove_temp_partition_and_expand_rpool {
 
   parted -s "${v_selected_disks[0]}" rm 4
 
+  if [[ $v_free_tail_space -eq 0 ]]; then
+    local resize_reference=100%
+  else
+    local resize_reference=-${v_free_tail_space}G
+  fi
+
   for selected_disk in "${v_selected_disks[@]}"; do
+    parted -s "$selected_disk" unit s resizepart 3 -- "$resize_reference"
     zpool online -e "$v_rpool_name" "$selected_disk-part3"
   done
 }

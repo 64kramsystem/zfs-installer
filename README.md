@@ -28,14 +28,22 @@ RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot an
 
 It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
 
-## Advantages over the Ubuntu built-in installer
+## Comparison with Ubuntu built-in installer
 
-With Ubuntu 19.10, Canonical released an experimental ZFS installer. The advantages of this project over this installer are:
+As of 20.04, Canonical makes available an experimental ZFS installer on Ubuntu Desktop.
 
-1. on production systems, it's undesirable to use a non-LTS version;
-2. the experimental Ubuntu installer is unconfigurable; it generates a fixed setup.
+The advantages of this project over the Ubuntu installer are:
 
-additionally, as explained in the previous section, the script can be easily adapted for other operating systems.
+1. it supports pools configuration;
+2. it allows customization of the disks setup (including mirroring);
+3. it supports additional features (e.g. encryption);
+4. it supports many more operating systems;
+5. it supports unattended installations, via custom scripts;
+6. it's easy to extend.
+
+The disadvantages are:
+
+1. the Ubuntu installer has a more sophisticated filesystem layout - it separates base directories into different ZFS filesystems (this is planned to be implemented in the ZFS installer as well).
 
 ## Instructions
 

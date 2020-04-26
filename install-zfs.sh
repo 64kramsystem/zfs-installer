@@ -41,7 +41,7 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]=19 [elementary]=5.1)
 c_boot_partition_size=768M   # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
@@ -592,7 +592,14 @@ function install_host_packages_elementary {
 function install_host_packages_UbuntuServer {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
+  if [[ $v_zfs_08_in_repository == "1" ]]; then
+    apt install --yes zfsutils-linux
+
+    zfs --version > "$c_zfs_module_version_log" 2>&1
+  elif [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
+    # This is not needed on UBS 20.04, which has the modules built-in - incidentally, if attempted,
+    # it will cause /dev/disk/by-id changes not to be recognized.
+    #
     # On Ubuntu Server, `/lib/modules` is a SquashFS mount, which is read-only.
     #
     cp -R /lib/modules /tmp/
@@ -609,12 +616,8 @@ function install_host_packages_UbuntuServer {
     apt update
     apt install -y "linux-headers-$(uname -r)" efibootmgr
 
-    if [[ $v_zfs_08_in_repository == "1" ]]; then
-      apt install --yes zfsutils-linux zfs-modules
-    fi
+    install_host_packages
   fi
-
-  install_host_packages
 }
 
 function setup_partitions {
@@ -998,7 +1001,7 @@ function install_jail_zfs_packages_UbuntuServer {
   print_step_info_header
 
   if [[ $v_zfs_08_in_repository == "1" ]]; then
-    chroot_execute "apt install --yes zfsutils-linux zfs-modules grub-efi-amd64-signed shim-signed"
+    chroot_execute "apt install --yes zfsutils-linux zfs-initramfs grub-efi-amd64-signed shim-signed"
   else
     install_jail_zfs_packages
   fi

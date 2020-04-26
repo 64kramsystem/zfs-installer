@@ -234,7 +234,7 @@ function check_prerequisites {
   elif [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" != "" && ! -x "$ZFS_OS_INSTALLATION_SCRIPT" ]]; then
     echo "The custom O/S installation script provided doesn't exist or is not executable!"
     exit 1
-  elif [[ -v ZFS_PASSPHRASE && ${#ZFS_PASSPHRASE} -lt 8 ]]; then
+  elif [[ -v ZFS_PASSPHRASE && -n $ZFS_PASSPHRASE && ${#ZFS_PASSPHRASE} -lt 8 ]]; then
     echo "The passphase provided is too short; at least 8 chars required."
     exit 1
   elif [[ ! -v c_supported_linux_distributions["$v_linux_distribution"] ]]; then

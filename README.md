@@ -15,7 +15,7 @@ I'll keep using it on my systems, so I'll update the code if required by my use 
 The program currently supports:
 
 - Ubuntu Desktop 18.04.x/20.04 Live
-- Ubuntu Server 18.04.4 Live
+- Ubuntu Server 18.04.x/20.04 Live
 - Linux Mint 19.x
 - Debian 10.x Live (desktop environment required)
 - ElementaryOS 5.1

@@ -14,8 +14,8 @@ I'll keep using it on my systems, so I'll update the code if required by my use 
 
 The program currently supports:
 
-- Ubuntu Desktop 18.04.x Live
-- Ubuntu Server 18.04.4 Live
+- Ubuntu Desktop 18.04.x/20.04 Live
+- Ubuntu Server 18.04.x/20.04 Live
 - Linux Mint 19.x
 - Debian 10.x Live (desktop environment required)
 - ElementaryOS 5.1
@@ -28,9 +28,9 @@ RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot an
 
 It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
 
-## Advantages over the Ubuntu 19.10 built-in installer
+## Advantages over the Ubuntu built-in installer
 
-Canonical released Ubuntu 19.10, with an experimental ZFS installer. The advantages of this project over the 19.10 installer are:
+With Ubuntu 19.10, Canonical released an experimental ZFS installer. The advantages of this project over this installer are:
 
 1. on production systems, it's undesirable to use a non-LTS version;
 2. the experimental Ubuntu installer is unconfigurable; it generates a fixed setup.
@@ -58,8 +58,7 @@ the rest is the same as the generic procedure.
 
 ### Issues/unsupported systems
 
-As of Feb/2020, Debian 10.x does not install stably on Virtualbox 6.x (but works fine on VMWare 15.5).  
-For unclear reasons, the EFI partition is not recognized unless the live CD is left in the virtual reader when rebooting after the installation (!).
+Due to a current problem with the zpool expansion, 12 GiB of empty space are left at the end of each disk.
 
 The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
 

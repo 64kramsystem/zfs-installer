@@ -13,24 +13,26 @@ set -o nounset
 
 # VARIABLES/CONSTANTS ##########################################################
 
+# Variables set by the script
+
+v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
+v_zfs_08_in_repository=      # 1=true, false otherwise (applies only to Ubuntu-based)
+
 # Variables set (indirectly) by the user
 
 v_bpool_name=
-v_bpool_tweaks=              # see defaults below for format
-v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
-v_linux_distribution_version=
-v_encrypt_rpool=             # 0=false, 1=true
-v_passphrase=
+v_bpool_tweaks=              # array; see defaults below for format
+v_passphrase=                # the corresponding var (ZFS_PASSPHRASE) has special behavior (see below)
 v_root_password=             # Debian-only
 v_rpool_name=
-v_rpool_tweaks=              # see defaults below for format
+v_rpool_tweaks=              # array; see defaults below for format
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
 
 # Variables set during execution
 
-v_temp_volume_device=        # /dev/zdN; scope: create_temp_volume -> install_operating_system
+v_temp_volume_device=        # /dev/zdN; scope: setup_partitions -> sync_os_temp_installation_dir_to_rpool
 v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
 
 # Constants
@@ -39,14 +41,13 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
-declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]=19 [elementary]=5.1)
 c_boot_partition_size=768M   # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
-c_lsb_release_log=$c_log_dir/lsb_release.log
+c_os_information_log=$c_log_dir/os_information.log
 c_disks_log=$c_log_dir/disks.log
 c_zfs_module_version_log=$c_log_dir/updated_module_versions.log
 
@@ -157,7 +158,7 @@ The procedure can be entirely automated via environment variables:
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
 - ZFS_ENCRYPT_RPOOL          : set 1 to encrypt the pool
-- ZFS_PASSPHRASE
+- ZFS_PASSPHRASE             : set non-blank to encrypt the pool, and blank not to. if unset, it will be asked.
 - ZFS_DEBIAN_ROOT_PASSWORD
 - ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
@@ -191,12 +192,6 @@ function activate_debug {
   set -x
 }
 
-function store_os_distro_information {
-  print_step_info_header
-
-  lsb_release --all > "$c_lsb_release_log"
-}
-
 function set_distribution_data {
   v_linux_distribution="$(lsb_release --id --short)"
 
@@ -207,8 +202,27 @@ function set_distribution_data {
   v_linux_version="$(lsb_release --release --short)"
 }
 
+function store_os_distro_information {
+  print_step_info_header
+
+  lsb_release --all > "$c_os_information_log"
+
+  # Madness, in order not to force the user to invoke "sudo -E".
+  # Assumes that the user runs exactly `sudo bash`; it's not a (current) concern if the user runs off specification.
+  #
+  perl -lne 'BEGIN { $/ = "\0" } print if /^XDG_CURRENT_DESKTOP=/' /proc/"$PPID"/environ >> "$c_os_information_log"
+}
+
+function store_os_distro_information_Debian {
+  store_os_distro_information
+
+  echo "DEBIAN_VERSION=$(cat /etc/debian_version)" >> "$c_os_information_log"
+}
+
 function check_prerequisites {
   print_step_info_header
+
+  local distro_version_regex=\\b${v_linux_version//./\\.}\\b
 
   # shellcheck disable=SC2116 # `=~ $(echo ...)` causes a warning; see https://git.io/Je2QP.
   #
@@ -224,10 +238,19 @@ function check_prerequisites {
   elif [[ ! -v c_supported_linux_distributions["$v_linux_distribution"] ]]; then
     echo "This Linux distribution ($v_linux_distribution) is not supported!"
     exit 1
-  elif [[ ! $v_linux_version =~ $(echo "^${c_supported_linux_distributions["$v_linux_distribution"]}\\b") ]]; then
-    echo "This Linux distribution version ($v_linux_version) is not supported; version supported: ${c_supported_linux_distributions["$v_linux_distribution"]}"
+  elif [[ ! ${c_supported_linux_distributions["$v_linux_distribution"]} =~ $distro_version_regex ]]; then
+    echo "This Linux distribution version ($v_linux_version) is not supported; supported versions: ${c_supported_linux_distributions["$v_linux_distribution"]}"
     exit 1
   fi
+
+  set +x
+
+  if [[ -v ZFS_PASSPHRASE && -n $ZFS_PASSPHRASE && ${#ZFS_PASSPHRASE} -lt 8 ]]; then
+    echo "The passphase provided is too short; at least 8 chars required."
+    exit 1
+  fi
+
+  set -x
 }
 
 function display_intro_banner {
@@ -311,6 +334,40 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
   print_variables v_suitable_disks
 }
 
+# There are three parameters:
+#
+# 1. the tools are preinstalled (ie. Ubuntu Desktop based);
+# 2. the default repository supports ZFS 0.8 (ie. Ubuntu 20.04+ based);
+# 3. the distro provides the precompiled ZFS module (i.e. Ubuntu based, not Debian)
+#
+# Fortunately, with Debian-specific logic isolated, we need conditionals based only on #2 - see
+# install_host_packages() and install_host_packages_UbuntuServer().
+#
+function find_zfs_package_requirements {
+  print_step_info_header
+
+  # WATCH OUT. This is assumed by code in later functions.
+  #
+  apt update
+
+  local zfs_package_version
+  zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print $1 if /^Version: (\d+\.\d+)\./')
+
+  if [[ -n $zfs_package_version ]]; then
+    if [[ ! $zfs_package_version =~ ^0\. ]]; then
+      >&2 echo "Unsupported ZFS version!: $zfs_package_version"
+      exit 1
+    elif (( $(echo "$zfs_package_version" | cut -d. -f2) >= 8 )); then
+      v_zfs_08_in_repository=1
+    fi
+  fi
+}
+
+function find_zfs_package_requirements_Debian {
+  # Do nothing - ZFS packages are handled in a specific way.
+  :
+}
+
 function select_disks {
   print_step_info_header
 
@@ -370,29 +427,32 @@ function ask_root_password_Debian {
 function ask_encryption {
   print_step_info_header
 
-  if [[ "${ZFS_ENCRYPT_RPOOL:-}" == "" ]]; then
-    if whiptail --yesno 'Do you want to encrypt the root pool?' 30 100; then
-      v_encrypt_rpool=1
-    fi
-  elif [[ "${ZFS_ENCRYPT_RPOOL:-}" != "0" ]]; then
-    v_encrypt_rpool=1
-  fi
   set +x
-  if [[ $v_encrypt_rpool == "1" ]]; then
-    if [[ ${ZFS_PASSPHRASE:-} != "" ]]; then
-      v_passphrase="$ZFS_PASSPHRASE"
-    else
-      local passphrase_invalid_message=
-      local passphrase_repeat=-
 
-      while [[ "$v_passphrase" != "$passphrase_repeat" || ${#v_passphrase} -lt 8 ]]; do
-        v_passphrase=$(whiptail --passwordbox "${passphrase_invalid_message}Please enter the passphrase (8 chars min.):" 30 100 3>&1 1>&2 2>&3)
-        passphrase_repeat=$(whiptail --passwordbox "Please repeat the passphrase:" 30 100 3>&1 1>&2 2>&3)
+  if [[ -v ZFS_PASSPHRASE ]]; then
+    v_passphrase=$ZFS_PASSPHRASE
+  else
+    local passphrase_repeat=_
+    local passphrase_invalid_message=
 
-        passphrase_invalid_message="Passphrase too short, or not matching! "
-      done
-    fi
+    while [[ $v_passphrase != "$passphrase_repeat" || ${#v_passphrase} -lt 8 ]]; do
+      local dialog_message="${passphrase_invalid_message}Please enter the passphrase (8 chars min.):
+
+Leave blank to keep encryption disabled.
+"
+
+      v_passphrase=$(whiptail --passwordbox "$dialog_message" 30 100 3>&1 1>&2 2>&3)
+
+      if [[ -z $v_passphrase ]]; then
+        break
+      fi
+
+      passphrase_repeat=$(whiptail --passwordbox "Please repeat the passphrase:" 30 100 3>&1 1>&2 2>&3)
+
+      passphrase_invalid_message="Passphrase too short, or not matching! "
+    done
   fi
+
   set -x
 }
 
@@ -465,17 +525,13 @@ function ask_pool_names {
 function ask_pool_tweaks {
   print_step_info_header
 
-  if [[ ${ZFS_BPOOL_TWEAKS:-} != "" ]]; then
-    v_bpool_tweaks=$ZFS_BPOOL_TWEAKS
-  else
-    v_bpool_tweaks=$(whiptail --inputbox "Insert the tweaks for the boot pool" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)
-  fi
+  local raw_bpool_tweaks=${ZFS_BPOOL_TWEAKS:-$(whiptail --inputbox "Insert the tweaks for the boot pool" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)}
 
-  if [[ ${ZFS_RPOOL_TWEAKS:-} != "" ]]; then
-    v_rpool_tweaks=$ZFS_RPOOL_TWEAKS
-  else
-    v_rpool_tweaks=$(whiptail --inputbox "Insert the tweaks for the root pool" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)
-  fi
+  mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$raw_bpool_tweaks")
+
+  local raw_rpool_tweaks=${ZFS_RPOOL_TWEAKS:-$(whiptail --inputbox "Insert the tweaks for the root pool" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)}
+
+  mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$raw_rpool_tweaks")
 
   print_variables v_bpool_tweaks v_rpool_tweaks
 }
@@ -483,26 +539,22 @@ function ask_pool_tweaks {
 function install_host_packages {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
-    echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
+  if [[ $v_zfs_08_in_repository != "1" ]]; then
+    if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
+      add-apt-repository --yes ppa:jonathonf/zfs
+      apt update
 
-    add-apt-repository --yes ppa:jonathonf/zfs
+      # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
+      # Module compilation log: `/var/lib/dkms/zfs/0.8.2/build/make.log` (adjust according to version).
+      #
+      echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
+      apt install --yes libelf-dev zfs-dkms
 
-    # Required only on LinuxMint, which doesn't update the apt data when invoking `add-apt-repository`.
-    # With the current design, it's arguably preferrable to introduce a redundant operation (for
-    # Ubuntu), rather than adding an almost entirely duplicated function.
-    #
-    apt update
-
-    # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
-    # Module compilation log: `/var/lib/dkms/zfs/0.8.2/build/make.log` (adjust according to version).
-    #
-    apt install --yes libelf-dev zfs-dkms
-
-    systemctl stop zfs-zed
-    modprobe -r zfs
-    modprobe zfs
-    systemctl start zfs-zed
+      systemctl stop zfs-zed
+      modprobe -r zfs
+      modprobe zfs
+      systemctl start zfs-zed
+    fi
   fi
 
   zfs --version > "$c_zfs_module_version_log" 2>&1
@@ -529,7 +581,7 @@ function install_host_packages_Debian {
 function install_host_packages_elementary {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     apt update
     apt install -y software-properties-common
   fi
@@ -540,7 +592,14 @@ function install_host_packages_elementary {
 function install_host_packages_UbuntuServer {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} == "" ]]; then
+  if [[ $v_zfs_08_in_repository == "1" ]]; then
+    apt install --yes zfsutils-linux
+
+    zfs --version > "$c_zfs_module_version_log" 2>&1
+  elif [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
+    # This is not needed on UBS 20.04, which has the modules built-in - incidentally, if attempted,
+    # it will cause /dev/disk/by-id changes not to be recognized.
+    #
     # On Ubuntu Server, `/lib/modules` is a SquashFS mount, which is read-only.
     #
     cp -R /lib/modules /tmp/
@@ -556,20 +615,20 @@ function install_host_packages_UbuntuServer {
     #
     apt update
     apt install -y "linux-headers-$(uname -r)" efibootmgr
-  fi
 
-  install_host_packages
+    install_host_packages
+  fi
 }
 
-function prepare_disks {
+function setup_partitions {
   print_step_info_header
 
-  # PARTITIONS #########################
+  local temporary_partition_start=-$((${c_temporary_volume_size:0:-1} + v_free_tail_space))G
 
   if [[ $v_free_tail_space -eq 0 ]]; then
-    local tail_space_parameter=0
+    local tail_space_start=0
   else
-    local tail_space_parameter="-${v_free_tail_space}G"
+    local tail_space_start="-${v_free_tail_space}G"
   fi
 
   for selected_disk in "${v_selected_disks[@]}"; do
@@ -577,9 +636,10 @@ function prepare_disks {
     #
     wipefs --all "$selected_disk"
 
-    sgdisk -n1:1M:+"$c_boot_partition_size" -t1:EF00 "$selected_disk" # EFI boot
-    sgdisk -n2:0:+"$c_boot_partition_size"  -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:"$tail_space_parameter"    -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n1:1M:+"$c_boot_partition_size"   -t1:EF00 "$selected_disk" # EFI boot
+    sgdisk -n2:0:+"$c_boot_partition_size"    -t2:BF01 "$selected_disk" # Boot pool
+    sgdisk -n3:0:"$temporary_partition_start" -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n4:0:"$tail_space_start"          -t4:8300 "$selected_disk" # Temporary partition
   done
 
   # The partition symlinks are not immediately created, so we wait.
@@ -614,104 +674,7 @@ function prepare_disks {
     mkfs.fat -F 32 -n EFI "${selected_disk}-part1"
   done
 
-  # POOL OPTIONS #######################
-
-  local encryption_options=()
-  local rpool_disks_partitions=()
-  local bpool_disks_partitions=()
-
-  if [[ $v_encrypt_rpool == "1" ]]; then
-    encryption_options=(-O "encryption=on" -O "keylocation=prompt" -O "keyformat=passphrase")
-  fi
-
-  for selected_disk in "${v_selected_disks[@]}"; do
-    rpool_disks_partitions+=("${selected_disk}-part3")
-    bpool_disks_partitions+=("${selected_disk}-part2")
-  done
-
-  if [[ ${#v_selected_disks[@]} -gt 1 ]]; then
-    local pools_mirror_option=mirror
-  else
-    local pools_mirror_option=
-  fi
-
-  # POOLS CREATION #####################
-
-  # See https://github.com/zfsonlinux/zfs/wiki/Ubuntu-18.04-Root-on-ZFS for the details.
-  #
-  # `-R` creates an "Alternate Root Point", which is lost on unmount; it's just a convenience for a temporary mountpoint;
-  # `-f` force overwrite partitions is existing - in some cases, even after wipefs, a filesystem is mistakenly recognized
-  # `-O` set filesystem properties on a pool (pools and filesystems are distincted entities, however, a pool includes an FS by default).
-  #
-  # Stdin is ignored if the encryption is not set (and set via prompt).
-  #
-  # shellcheck disable=SC2086 # unquoted tweaks variable (splitting is expected)
-  set +x
-  echo -n "$v_passphrase" | zpool create \
-    "${encryption_options[@]}" \
-    $v_rpool_tweaks \
-    -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
-    "$v_rpool_name" $pools_mirror_option "${rpool_disks_partitions[@]}"
-  set -x
-
-  # `-d` disable all the pool features (not used here);
-  #
-  # shellcheck disable=SC2086 # see previous command
-  zpool create \
-    $v_bpool_tweaks \
-    -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
-    "$v_bpool_name" $pools_mirror_option "${bpool_disks_partitions[@]}"
-
-  # SWAP ###############################
-
-  if [[ $v_swap_size -gt 0 ]]; then
-    zfs create \
-      -V "${v_swap_size}G" -b "$(getconf PAGESIZE)" \
-      -o compression=zle -o logbias=throughput -o sync=always -o primarycache=metadata -o secondarycache=none -o com.sun:auto-snapshot=false \
-      "$v_rpool_name/swap"
-
-    mkswap -f "/dev/zvol/$v_rpool_name/swap"
-  fi
-}
-
-function create_temp_volume {
-  print_step_info_header
-
-  zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
-
-  # The volume may not be immediately available; for reference, "/dev/zvol/.../os-install-temp"
-  # is a standard file, which turns into symlink once the volume is available. See #8.
-  #
-  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
-
-  v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
-
-  sgdisk -n1:0:0 -t1:8300 "$v_temp_volume_device"
-
-  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
-}
-
-# Differently from Ubuntu, the installer (Calamares) requires a filesystem to be ready.
-#
-function create_temp_volume_Debian {
-  print_step_info_header
-
-  create_temp_volume
-
-  mkfs.ext4 -F "$v_temp_volume_device"
-}
-
-# Let Subiquity take care of the partitions/FSs; the current patch allow the installer to handle
-# only virtual block devices, not partitions belonging to them.
-#
-function create_temp_volume_UbuntuServer {
-  print_step_info_header
-
-  zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
-
-  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
-
-  v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
+  v_temp_volume_device=$(readlink -f "${v_selected_disks[0]}-part4")
 }
 
 function install_operating_system {
@@ -722,10 +685,10 @@ function install_operating_system {
 Proceed with the configuration as usual, then, at the partitioning stage:
 
 - check `Something Else` -> `Continue`
-- select `'"$v_temp_volume_device"p1'` -> `Change`
+- select `'"$v_temp_volume_device"'` -> `Change`
   - set `Use as:` to `Ext4`
   - check `Format the partition:`
-  - set `Mount point` to `/` -> `OK`
+  - set `Mount point` to `/` -> `OK` -> `Continue`
 - `Install Now` -> `Continue`
 - at the end, choose `Continue Testing`
 '
@@ -751,8 +714,10 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   # Note that we assume that the user created only one partition on the temp volume, as expected.
   #
   if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
-    mount "${v_temp_volume_device}p1" "$c_installed_os_data_mount_dir"
+    mount "$v_temp_volume_device" "$c_installed_os_data_mount_dir"
   fi
+
+  rm -f "$c_installed_os_data_mount_dir/swapfile"
 }
 
 function install_operating_system_Debian {
@@ -767,8 +732,8 @@ function install_operating_system_Debian {
 Proceed with the configuration as usual, then, at the partitioning stage:
 
 - check `Manual partitioning` -> `Next`
-- set `Storage device` to `Unknown - '"${c_temporary_volume_size}"' '"${v_temp_volume_device}"'`
 - click on `'"${v_temp_volume_device}"'` in the filesystems panel -> `Edit`
+  - click on `Format`
   - set `Mount Point` to `/` -> `OK`
 - `Next`
 - follow through the installation (ignore the EFI partition warning)
@@ -812,99 +777,33 @@ CONF
 function install_operating_system_UbuntuServer {
   print_step_info_header
 
-  # Patch Subiquity
-  #
-  # We need to patch Subiquity, since it doesn't support virtual block devices. It's not exactly
-  # clear why though, since after patching, the installation works fine.
-  #
-  # See https://bugs.launchpad.net/subiquity/+bug/1811037.
-
-  # Not clear what the number represents, but better to be safe.
-  #
-  local subiquity_id
-  subiquity_id=$(find /snap/subiquity -maxdepth 1 -regextype awk -regex '.*/[[:digit:]]+' -printf '%f')
-
-  unsquashfs -d "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap"
-
-  local zfs_volume_name=${v_temp_volume_device##*/}
-
-  # For a search/replace approach (with helper API), check the history.
-
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py" << DIFF
-575c575
-<             if data.get('DEVPATH', '').startswith('/devices/virtual'):
----
->             if re.match('^/devices/virtual(?!/block/$zfs_volume_name)', data.get('DEVPATH', '')):
-DIFF
-
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py" << DIFF
-18a19
-> import re
-85c86
-<         return self.devpath.startswith('/devices/virtual/')
----
->         return re.match('^/devices/virtual/(?!block/$zfs_volume_name)', self.devpath)
-DIFF
-
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/block/__init__.py" << 'DIFF'
-116c116
-<     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md']:
----
->     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md', 'zd']:
-DIFF
-
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/subiquity/ui/views/installprogress.py" << 'DIFF'
-diff lib/python3.6/site-packages/subiquity/ui/views/installprogress.py{.bak,}
-47a48,49
->         self.exit_btn = cancel_btn(
->             _("Exit To Shell"), on_press=self.quit)
-121c123
-<         btns = [self.view_log_btn, self.reboot_btn]
----
->         btns = [self.view_log_btn, self.exit_btn, self.reboot_btn]
-133a136,138
->     def quit(self, btn):
->         self.controller.quit()
-> 
-DIFF
-
-  snap stop subiquity
-  umount "/snap/subiquity/$subiquity_id"
-
-  # Possibly, we could even just symlink, however, since we're running everything in memory, 200+
-  # MB of savings are meaningful.
-  #
-  mksquashfs "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap" -noappend -always-use-fragments
-  rm -rf "$c_unpacked_subiquity_dir"
-
   # O/S Installation
   #
   # Subiquity is designed to prevent the user from opening a terminal, which is (to say the least)
   # incongruent with the audience.
 
-  local dialog_message='The Ubuntu Server installer (Subiquity) will now be launched.
+  local dialog_message='You'\''ll now need to run the Ubuntu Server installer (Subiquity).
 
-Proceed with the configuration as usual, then, at the partitioning stage:
+Switch back to the original terminal (Ctrl+Shift+F1), then proceed with the configuration as usual.
 
-- select `Use an entire disk`
-- select `'"$v_temp_volume_device"'`
-- `Done` -> `Continue` (ignore the warning)
-- follow through the installation
-- after the security updates are installed, exit to the shell, and follow up with the ZFS installer
+When the update option is presented, choose to update Subiquity to the latest version.
+
+At the partitioning stage:
+
+- select `Custom storage layout` -> `Done`
+- select `'"$v_temp_volume_device"'` -> `Edit`
+  - set `Format:` to `ext4` (mountpoint will be automatically selected)
+  - click `Save`
+- click `Done` -> `Continue` (ignore warning)
+- follow through the installation, until the end (after the updates are applied)
+- switch back to this terminal (Ctrl+Alt+F2), and continue (tap Enter)
+
+Do not continue in this terminal (tap Enter) now!
+
+You can switch anytime to this terminal, and back, in order to read the instructions.
 '
 
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
-    whiptail --msgbox "$dialog_message" 30 100
-  fi
-
-  # When not running via `snap start` (which we can't, otherwise it runs in the other terminal),
-  # the binaries are not found, so we manually add them to the path.
-  #
-  # Running with `--bootloader=none` currently crashes Subiquity, possibly due to a bug (missing
-  # `lszdev` binary) - see https://bugs.launchpad.net/subiquity/+bug/1857556.
-  #
-  mount "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap" "/snap/subiquity/$subiquity_id"
-  PATH="/snap/subiquity/$subiquity_id/bin:/snap/subiquity/$subiquity_id/usr/bin:$PATH" snap run subiquity
+  whiptail --msgbox "$dialog_message" 30 100
 
   swapoff -a
 
@@ -918,21 +817,80 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   rm -f "$c_installed_os_data_mount_dir"/swap.img
 }
 
+function custom_install_operating_system {
+  print_step_info_header
+
+  sudo "$ZFS_OS_INSTALLATION_SCRIPT"
+}
+
+function create_pools {
+  # POOL OPTIONS #######################
+
+  local encryption_options=()
+  local rpool_disks_partitions=()
+  local bpool_disks_partitions=()
+
+  set +x
+
+  if [[ -n $v_passphrase ]]; then
+    encryption_options=(-O "encryption=on" -O "keylocation=prompt" -O "keyformat=passphrase")
+  fi
+
+  set -x
+
+  for selected_disk in "${v_selected_disks[@]}"; do
+    rpool_disks_partitions+=("${selected_disk}-part3")
+    bpool_disks_partitions+=("${selected_disk}-part2")
+  done
+
+  if [[ ${#v_selected_disks[@]} -gt 1 ]]; then
+    local pools_mirror_option=mirror
+  else
+    local pools_mirror_option=
+  fi
+
+  # POOLS CREATION #####################
+
+  # See https://github.com/zfsonlinux/zfs/wiki/Ubuntu-18.04-Root-on-ZFS for the details.
+  #
+  # `-R` creates an "Alternate Root Point", which is lost on unmount; it's just a convenience for a temporary mountpoint;
+  # `-f` force overwrite partitions is existing - in some cases, even after wipefs, a filesystem is mistakenly recognized
+  # `-O` set filesystem properties on a pool (pools and filesystems are distincted entities, however, a pool includes an FS by default).
+  #
+  # Stdin is ignored if the encryption is not set (and set via prompt).
+  #
+  set +x
+  echo -n "$v_passphrase" | zpool create \
+    "${encryption_options[@]}" \
+    "${v_rpool_tweaks[@]}" \
+    -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
+    "$v_rpool_name" $pools_mirror_option "${rpool_disks_partitions[@]}"
+  set -x
+
+  # `-d` disable all the pool features (not used here);
+  #
+  zpool create \
+    "${v_bpool_tweaks[@]}" \
+    -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
+    "$v_bpool_name" $pools_mirror_option "${bpool_disks_partitions[@]}"
+}
+
+function create_swap_volume {
+  if [[ $v_swap_size -gt 0 ]]; then
+    zfs create \
+      -V "${v_swap_size}G" -b "$(getconf PAGESIZE)" \
+      -o compression=zle -o logbias=throughput -o sync=always -o primarycache=metadata -o secondarycache=none -o com.sun:auto-snapshot=false \
+      "$v_rpool_name/swap"
+
+    mkswap -f "/dev/zvol/$v_rpool_name/swap"
+  fi
+}
+
 function sync_os_temp_installation_dir_to_rpool {
   print_step_info_header
 
-  # Extended attributes are not used on a standard Ubuntu installation, however, this needs to be generic.
-  # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
-  # ❤️ Perl ❤️
+  # On Ubuntu Server, `/boot/efi` and `/cdrom` (!!!) are mounted, but they're not needed.
   #
-  # The motd file needs to be excluded because it vanishes during the rsync execution, causing an
-  # error. Without checking, it's not clear why this happens, since Subiquity supposedly finished,
-  # but it's not a necessary file.
-  #
-  rsync -avX --exclude=/swapfile --exclude=/run/motd.dynamic.new --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
-    perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
-    whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
-
   local mount_dir_submounts
   mount_dir_submounts=$(mount | MOUNT_DIR="${c_installed_os_data_mount_dir%/}" perl -lane 'print $F[2] if $F[2] =~ /$ENV{MOUNT_DIR}\//')
 
@@ -940,13 +898,36 @@ function sync_os_temp_installation_dir_to_rpool {
     umount "$mount_dir"
   done
 
+  # Extended attributes are not used on a standard Ubuntu installation, however, this needs to be generic.
+  # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
+  # ❤️ Perl ❤️
+  #
+  # `/run` is not needed (with an exception), and in Ubuntu Server it's actually a nuisance, since
+  # some files vanish while syncing. Debian is well-behaved, and `/run` is empty.
+  #
+  rsync -avX --exclude=/run --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
+    perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
+    whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
+
+  mkdir "$c_zfs_mount_dir/run"
+
+  # Required destination of symlink `/etc/resolv.conf`, present in Ubuntu systems (not Debian).
+  #
+  if [[ -d $c_installed_os_data_mount_dir/run/systemd/resolve ]]; then
+    rsync -av --relative "$c_installed_os_data_mount_dir/run/./systemd/resolve" "$c_zfs_mount_dir/run"
+  fi
+
   umount "$c_installed_os_data_mount_dir"
 }
 
-function destroy_temp_volume {
+function remove_temp_partition_and_expand_rpool {
   print_step_info_header
 
-  zfs destroy "$v_rpool_name/os-install-temp"
+  parted -s "${v_selected_disks[0]}" rm 4
+
+  for selected_disk in "${v_selected_disks[@]}"; do
+    zpool online -e "$v_rpool_name" "$selected_disk-part3"
+  done
 }
 
 function prepare_jail {
@@ -959,24 +940,32 @@ function prepare_jail {
   chroot_execute 'echo "nameserver 8.8.8.8" >> /etc/resolv.conf'
 }
 
-function custom_install_operating_system {
-  print_step_info_header
-
-  sudo "$ZFS_OS_INSTALLATION_SCRIPT"
-}
-
 # See install_host_packages() for some comments.
 #
 function install_jail_zfs_packages {
   print_step_info_header
 
-  chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
+  if [[ $v_zfs_08_in_repository != "1" ]]; then
+    chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
 
-  chroot_execute "apt update"
+    chroot_execute "apt update"
 
-  chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
+    chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
 
-  chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+    chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms"
+  else
+    # Oddly, on a 20.04 Ubuntu Desktop live session, the zfs tools are installed, but they are not
+    # associated to a package:
+    #
+    # - `dpkg -S $(which zpool)` -> nothing
+    # - `aptitude search ~izfs | awk '{print $2}' | xargs echo` -> libzfs2linux zfs-initramfs zfs-zed zfsutils-linux
+    #
+    # The packages are not installed by default, so we install them.
+    #
+    chroot_execute "apt install --yes libzfs2linux zfs-initramfs zfs-zed zfsutils-linux"
+  fi
+
+  chroot_execute "apt install --yes grub-efi-amd64-signed shim-signed"
 }
 
 function install_jail_zfs_packages_Debian {
@@ -1006,6 +995,16 @@ function install_jail_zfs_packages_elementary {
   chroot_execute "apt install -y software-properties-common"
 
   install_jail_zfs_packages
+}
+
+function install_jail_zfs_packages_UbuntuServer {
+  print_step_info_header
+
+  if [[ $v_zfs_08_in_repository == "1" ]]; then
+    chroot_execute "apt install --yes zfsutils-linux zfs-initramfs grub-efi-amd64-signed shim-signed"
+  else
+    install_jail_zfs_packages
+  fi
 }
 
 function install_and_configure_bootloader {
@@ -1249,11 +1248,12 @@ if [[ $# -ne 0 ]]; then
 fi
 
 activate_debug
-store_os_distro_information
 set_distribution_data
+distro_dependent_invoke "store_os_distro_information"
 check_prerequisites
 display_intro_banner
 find_suitable_disks
+find_zfs_package_requirements
 
 select_disks
 distro_dependent_invoke "ask_root_password" --noforce
@@ -1264,21 +1264,21 @@ ask_pool_names
 ask_pool_tweaks
 
 distro_dependent_invoke "install_host_packages"
-prepare_disks
+setup_partitions
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
-  distro_dependent_invoke "create_temp_volume"
-
   # Includes the O/S extra configuration, if necessary (network, root pwd, etc.)
   distro_dependent_invoke "install_operating_system"
-
-  sync_os_temp_installation_dir_to_rpool
-  destroy_temp_volume
-  prepare_jail
 else
   custom_install_operating_system
 fi
 
+create_pools
+create_swap_volume
+sync_os_temp_installation_dir_to_rpool
+remove_temp_partition_and_expand_rpool
+
+prepare_jail
 distro_dependent_invoke "install_jail_zfs_packages"
 distro_dependent_invoke "install_and_configure_bootloader"
 sync_efi_partitions

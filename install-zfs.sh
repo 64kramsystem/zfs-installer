@@ -616,10 +616,8 @@ function install_host_packages_UbuntuServer {
   install_host_packages
 }
 
-function prepare_disks {
+function setup_partitions {
   print_step_info_header
-
-  # PARTITIONS #########################
 
   if [[ $v_free_tail_space -eq 0 ]]; then
     local tail_space_parameter=0
@@ -668,7 +666,9 @@ function prepare_disks {
   for selected_disk in "${v_selected_disks[@]}"; do
     mkfs.fat -F 32 -n EFI "${selected_disk}-part1"
   done
+}
 
+function create_pools {
   # POOL OPTIONS #######################
 
   local encryption_options=()
@@ -718,9 +718,9 @@ function prepare_disks {
     "${v_bpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
     "$v_bpool_name" $pools_mirror_option "${bpool_disks_partitions[@]}"
+}
 
-  # SWAP ###############################
-
+function create_swap_volume {
   if [[ $v_swap_size -gt 0 ]]; then
     zfs create \
       -V "${v_swap_size}G" -b "$(getconf PAGESIZE)" \
@@ -1336,7 +1336,9 @@ ask_pool_names
 ask_pool_tweaks
 
 distro_dependent_invoke "install_host_packages"
-prepare_disks
+setup_partitions
+create_pools
+create_swap_volume
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
   distro_dependent_invoke "create_temp_volume"

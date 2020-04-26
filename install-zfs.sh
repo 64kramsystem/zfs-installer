@@ -620,9 +620,9 @@ function setup_partitions {
   print_step_info_header
 
   if [[ $v_free_tail_space -eq 0 ]]; then
-    local tail_space_parameter=0
+    local tail_space_start=0
   else
-    local tail_space_parameter="-${v_free_tail_space}G"
+    local tail_space_start="-${v_free_tail_space}G"
   fi
 
   for selected_disk in "${v_selected_disks[@]}"; do
@@ -632,7 +632,7 @@ function setup_partitions {
 
     sgdisk -n1:1M:+"$c_boot_partition_size" -t1:EF00 "$selected_disk" # EFI boot
     sgdisk -n2:0:+"$c_boot_partition_size"  -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:"$tail_space_parameter"    -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n3:0:"$tail_space_start"        -t3:BF01 "$selected_disk" # Root pool
   done
 
   # The partition symlinks are not immediately created, so we wait.

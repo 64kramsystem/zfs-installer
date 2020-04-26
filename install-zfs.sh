@@ -539,8 +539,8 @@ function ask_pool_tweaks {
 function install_host_packages {
   print_step_info_header
 
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
-    if [[ $v_zfs_08_in_repository != "1" ]]; then
+  if [[ $v_zfs_08_in_repository != "1" ]]; then
+    if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
       add-apt-repository --yes ppa:jonathonf/zfs
       apt update
 

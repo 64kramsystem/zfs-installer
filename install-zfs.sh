@@ -222,6 +222,8 @@ function store_os_distro_information_Debian {
 function check_prerequisites {
   print_step_info_header
 
+  local distro_version_regex=\\b${v_linux_version//./\\.}\\b
+
   # shellcheck disable=SC2116 # `=~ $(echo ...)` causes a warning; see https://git.io/Je2QP.
   #
   if [[ ! -d /sys/firmware/efi ]]; then
@@ -236,8 +238,8 @@ function check_prerequisites {
   elif [[ ! -v c_supported_linux_distributions["$v_linux_distribution"] ]]; then
     echo "This Linux distribution ($v_linux_distribution) is not supported!"
     exit 1
-  elif [[ ! $v_linux_version =~ $(echo "^${c_supported_linux_distributions["$v_linux_distribution"]}\\b") ]]; then
-    echo "This Linux distribution version ($v_linux_version) is not supported; version supported: ${c_supported_linux_distributions["$v_linux_distribution"]}"
+  elif [[ ! ${c_supported_linux_distributions["$v_linux_distribution"]} =~ $distro_version_regex ]]; then
+    echo "This Linux distribution version ($v_linux_version) is not supported; supported versions: ${c_supported_linux_distributions["$v_linux_distribution"]}"
     exit 1
   fi
 
@@ -890,7 +892,7 @@ function sync_os_temp_installation_dir_to_rpool {
   #
   # The `/run` files excluded happen in the Ubuntu Server installation. Possibly, the entire directory
   # could be ignored, as it's intended to included ephemeral data.
-  # The `/cdrom` mount is present at least in the Ubuntu Server installation.
+  # The `/cdrom` mount is present in the Ubuntu Server installation, but not in the Ubuntu Desktop.
   #
   rsync -avX --exclude=/cdrom --exclude=/run/motd.dynamic.new --exclude=/run/udev/queue --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |

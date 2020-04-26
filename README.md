@@ -64,11 +64,11 @@ Ubuntu Server requires a slightly different execution procedure:
 
 the rest is the same as the generic procedure.
 
-### Issues/unsupported systems
-
-Due to a current problem with the zpool expansion, 12 GiB of empty space are left at the end of each disk.
+### Unsupported systems/Issues
 
 The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
+
+The installer itself can run over SSH (\[S\]Ubiquity of course needs to be still run in the desktop environment, unless a custom script is provided), however, GNU Screen sessions may break, due to the virtual filesystems rebinding/chrooting. This is not an issue with the ZFS installer; it's a necessary step of the destination configuration.
 
 ### Unattended installations
 

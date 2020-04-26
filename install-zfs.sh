@@ -890,7 +890,7 @@ function sync_os_temp_installation_dir_to_rpool {
   #
   # The `/run` files excluded happen in the Ubuntu Server installation. Possibly, the entire directory
   # could be ignored, as it's intended to included ephemeral data.
-  # The `/cdrom` mount is present at least in the Ubuntu Server installation.
+  # The `/cdrom` mount is present in the Ubuntu Server installation, but not in the Ubuntu Desktop.
   #
   rsync -avX --exclude=/cdrom --exclude=/run/motd.dynamic.new --exclude=/run/udev/queue --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |

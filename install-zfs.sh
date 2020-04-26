@@ -1027,13 +1027,17 @@ function custom_install_operating_system {
 function install_jail_zfs_packages {
   print_step_info_header
 
-  chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
+  if [[ $v_zfs_08_in_repository != "1" ]]; then
+    chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
 
-  chroot_execute "apt update"
+    chroot_execute "apt update"
 
-  chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
+    chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
 
-  chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+    chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms"
+  fi
+
+  chroot_execute "apt install --yes grub-efi-amd64-signed shim-signed"
 }
 
 function install_jail_zfs_packages_Debian {
@@ -1063,6 +1067,16 @@ function install_jail_zfs_packages_elementary {
   chroot_execute "apt install -y software-properties-common"
 
   install_jail_zfs_packages
+}
+
+function install_jail_zfs_packages_UbuntuServer {
+  print_step_info_header
+
+  if [[ $v_zfs_08_in_repository == "1" ]]; then
+    chroot_execute "apt install --yes zfsutils-linux zfs-modules grub-efi-amd64-signed shim-signed"
+  else
+    install_jail_zfs_packages
+  fi
 }
 
 function install_and_configure_bootloader {

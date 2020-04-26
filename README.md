@@ -62,8 +62,7 @@ the rest is the same as the generic procedure.
 
 ### Issues/unsupported systems
 
-As of Feb/2020, Debian 10.x does not install stably on Virtualbox 6.x (but works fine on VMWare 15.5).  
-For unclear reasons, the EFI partition is not recognized unless the live CD is left in the virtual reader when rebooting after the installation (!).
+Due to a current problem with the zpool expansion, 12 GiB of empty space are left at the end of each disk.
 
 The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
 

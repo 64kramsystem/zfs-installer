@@ -32,7 +32,7 @@ v_free_tail_space=           # integer
 
 # Variables set during execution
 
-v_temp_volume_device=        # /dev/zdN; scope: create_temp_volume -> install_operating_system
+v_temp_volume_device=        # /dev/zdN; scope: setup_partitions -> sync_os_temp_installation_dir_to_rpool
 v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
 
 # Constants
@@ -41,7 +41,6 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-c_unpacked_subiquity_dir=/tmp/ubiquity_snap_files
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
 c_boot_partition_size=768M   # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
@@ -619,6 +618,8 @@ function install_host_packages_UbuntuServer {
 function setup_partitions {
   print_step_info_header
 
+  local temporary_partition_start=-$((${c_temporary_volume_size:0:-1} + v_free_tail_space))G
+
   if [[ $v_free_tail_space -eq 0 ]]; then
     local tail_space_start=0
   else
@@ -630,9 +631,10 @@ function setup_partitions {
     #
     wipefs --all "$selected_disk"
 
-    sgdisk -n1:1M:+"$c_boot_partition_size" -t1:EF00 "$selected_disk" # EFI boot
-    sgdisk -n2:0:+"$c_boot_partition_size"  -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:"$tail_space_start"        -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n1:1M:+"$c_boot_partition_size"   -t1:EF00 "$selected_disk" # EFI boot
+    sgdisk -n2:0:+"$c_boot_partition_size"    -t2:BF01 "$selected_disk" # Boot pool
+    sgdisk -n3:0:"$temporary_partition_start" -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n4:0:"$tail_space_start"          -t4:8300 "$selected_disk" # Temporary partition
   done
 
   # The partition symlinks are not immediately created, so we wait.
@@ -666,6 +668,154 @@ function setup_partitions {
   for selected_disk in "${v_selected_disks[@]}"; do
     mkfs.fat -F 32 -n EFI "${selected_disk}-part1"
   done
+
+  v_temp_volume_device=$(readlink -f "${v_selected_disks[0]}-part4")
+}
+
+function install_operating_system {
+  print_step_info_header
+
+  local dialog_message='The Ubuntu GUI installer will now be launched.
+
+Proceed with the configuration as usual, then, at the partitioning stage:
+
+- check `Something Else` -> `Continue`
+- select `'"$v_temp_volume_device"'` -> `Change`
+  - set `Use as:` to `Ext4`
+  - check `Format the partition:`
+  - set `Mount point` to `/` -> `OK` -> `Continue`
+- `Install Now` -> `Continue`
+- at the end, choose `Continue Testing`
+'
+
+  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+    whiptail --msgbox "$dialog_message" 30 100
+  fi
+
+  # The display is restricted only to the owner (`user`), so we need to allow any user to access
+  # it.
+  #
+  sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
+
+  DISPLAY=:0 ubiquity --no-bootloader
+
+  swapoff -a
+
+  # /target is not always unmounted; the reason is unclear. A possibility is that if there is an
+  # active swapfile under `/target` and ubiquity fails to unmount /target, it fails silently,
+  # leaving `/target` mounted.
+  # For this reason, if it's not mounted, we remount it.
+  #
+  # Note that we assume that the user created only one partition on the temp volume, as expected.
+  #
+  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
+    mount "$v_temp_volume_device" "$c_installed_os_data_mount_dir"
+  fi
+
+  rm -f "$c_installed_os_data_mount_dir/swapfile"
+}
+
+function install_operating_system_Debian {
+  print_step_info_header
+
+  # The temporary volume size displayed is an approximation of the format used by the installer,
+  # but it's acceptable - the complexity required is not worth (eg. converting hypothetical units,
+  # etc.).
+  #
+  local dialog_message='The Debian GUI installer will now be launched.
+
+Proceed with the configuration as usual, then, at the partitioning stage:
+
+- check `Manual partitioning` -> `Next`
+- click on `'"${v_temp_volume_device}"'` in the filesystems panel -> `Edit`
+  - click on `Format`
+  - set `Mount Point` to `/` -> `OK`
+- `Next`
+- follow through the installation (ignore the EFI partition warning)
+- at the end, uncheck `Restart now`, and click `Done`
+'
+
+  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+    whiptail --msgbox "$dialog_message" 30 100
+  fi
+
+  # See install_operating_system().
+  #
+  sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
+
+  DISPLAY=:0 calamares
+
+  mkdir -p "$c_installed_os_data_mount_dir"
+
+  # Note how in Debian, for reasons currenly unclear, the mount fails if the partition is passed;
+  # it requires the device to be passed.
+  #
+  mount "${v_temp_volume_device}" "$c_installed_os_data_mount_dir"
+
+  # We don't use chroot()_execute here, as it works on $c_zfs_mount_dir (which is synced on a
+  # later stage).
+  #
+  set +x
+  chroot "$c_installed_os_data_mount_dir" bash -c "echo root:$(printf "%q" "$v_root_password") | chpasswd"
+  set -x
+
+  # The installer doesn't set the network interfaces, so, for convenience, we do it.
+  #
+  for interface in $(ip addr show | perl -lne '/^\d+: (?!lo:)(\w+)/ && print $1' ); do
+    cat > "$c_installed_os_data_mount_dir/etc/network/interfaces.d/$interface" <<CONF
+  auto $interface
+  iface $interface inet dhcp
+CONF
+  done
+}
+
+function install_operating_system_UbuntuServer {
+  print_step_info_header
+
+  # O/S Installation
+  #
+  # Subiquity is designed to prevent the user from opening a terminal, which is (to say the least)
+  # incongruent with the audience.
+
+  local dialog_message='You'\''ll now need to run the Ubuntu Server installer (Subiquity).
+
+Switch back to the original terminal (Ctrl+Shift+F1), then proceed with the configuration as usual.
+
+When the update option is presented, choose to update Subiquity to the latest version.
+
+At the partitioning stage:
+
+- select `Custom storage layout` -> `Done`
+- select `'"$v_temp_volume_device"'` -> `Edit`
+  - set `Format:` to `ext4` (mountpoint will be automatically selected)
+  - click `Save`
+- click `Done` -> `Continue` (ignore warning)
+- follow through the installation, until the end (after the updates are applied)
+- switch back to this terminal (Ctrl+Alt+F2), and continue (tap Enter)
+
+Do not continue in this terminal (tap Enter) now!
+
+You can switch anytime to this terminal, and back, in order to read the instructions.
+'
+
+  whiptail --msgbox "$dialog_message" 30 100
+
+  swapoff -a
+
+  # See note in install_operating_system(). It's not clear whether this is required on Ubuntu
+  # Server, but it's better not to take risks.
+  #
+  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
+    mount "${v_temp_volume_device}p2" "$c_installed_os_data_mount_dir"
+  fi
+
+  rm -f "$c_installed_os_data_mount_dir"/swap.img
+}
+
+function custom_install_operating_system {
+  print_step_info_header
+
+  sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
 function create_pools {
@@ -731,252 +881,6 @@ function create_swap_volume {
   fi
 }
 
-function create_temp_volume {
-  print_step_info_header
-
-  zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
-
-  # The volume may not be immediately available; for reference, "/dev/zvol/.../os-install-temp"
-  # is a standard file, which turns into symlink once the volume is available. See #8.
-  #
-  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
-
-  v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
-
-  sgdisk -n1:0:0 -t1:8300 "$v_temp_volume_device"
-
-  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
-}
-
-# Differently from Ubuntu, the installer (Calamares) requires a filesystem to be ready.
-#
-function create_temp_volume_Debian {
-  print_step_info_header
-
-  create_temp_volume
-
-  mkfs.ext4 -F "$v_temp_volume_device"
-}
-
-# Let Subiquity take care of the partitions/FSs; the current patch allow the installer to handle
-# only virtual block devices, not partitions belonging to them.
-#
-function create_temp_volume_UbuntuServer {
-  print_step_info_header
-
-  zfs create -V "$c_temporary_volume_size" "$v_rpool_name/os-install-temp"
-
-  udevadm settle --timeout "$c_udevadm_settle_timeout" || true
-
-  v_temp_volume_device=$(readlink -f "/dev/zvol/$v_rpool_name/os-install-temp")
-}
-
-function install_operating_system {
-  print_step_info_header
-
-  local dialog_message='The Ubuntu GUI installer will now be launched.
-
-Proceed with the configuration as usual, then, at the partitioning stage:
-
-- check `Something Else` -> `Continue`
-- select `'"$v_temp_volume_device"p1'` -> `Change`
-  - set `Use as:` to `Ext4`
-  - check `Format the partition:`
-  - set `Mount point` to `/` -> `OK`
-- `Install Now` -> `Continue`
-- at the end, choose `Continue Testing`
-'
-
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
-    whiptail --msgbox "$dialog_message" 30 100
-  fi
-
-  # The display is restricted only to the owner (`user`), so we need to allow any user to access
-  # it.
-  #
-  sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
-
-  DISPLAY=:0 ubiquity --no-bootloader
-
-  swapoff -a
-
-  # /target is not always unmounted; the reason is unclear. A possibility is that if there is an
-  # active swapfile under `/target` and ubiquity fails to unmount /target, it fails silently,
-  # leaving `/target` mounted.
-  # For this reason, if it's not mounted, we remount it.
-  #
-  # Note that we assume that the user created only one partition on the temp volume, as expected.
-  #
-  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
-    mount "${v_temp_volume_device}p1" "$c_installed_os_data_mount_dir"
-  fi
-
-  rm -f "$c_installed_os_data_mount_dir/swapfile"
-}
-
-function install_operating_system_Debian {
-  print_step_info_header
-
-  # The temporary volume size displayed is an approximation of the format used by the installer,
-  # but it's acceptable - the complexity required is not worth (eg. converting hypothetical units,
-  # etc.).
-  #
-  local dialog_message='The Debian GUI installer will now be launched.
-
-Proceed with the configuration as usual, then, at the partitioning stage:
-
-- check `Manual partitioning` -> `Next`
-- set `Storage device` to `Unknown - '"${c_temporary_volume_size}"' '"${v_temp_volume_device}"'`
-- click on `'"${v_temp_volume_device}"'` in the filesystems panel -> `Edit`
-  - set `Mount Point` to `/` -> `OK`
-- `Next`
-- follow through the installation (ignore the EFI partition warning)
-- at the end, uncheck `Restart now`, and click `Done`
-'
-
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
-    whiptail --msgbox "$dialog_message" 30 100
-  fi
-
-  # See install_operating_system().
-  #
-  sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
-
-  DISPLAY=:0 calamares
-
-  mkdir -p "$c_installed_os_data_mount_dir"
-
-  # Note how in Debian, for reasons currenly unclear, the mount fails if the partition is passed;
-  # it requires the device to be passed.
-  #
-  mount "${v_temp_volume_device}" "$c_installed_os_data_mount_dir"
-
-  # We don't use chroot()_execute here, as it works on $c_zfs_mount_dir (which is synced on a
-  # later stage).
-  #
-  set +x
-  chroot "$c_installed_os_data_mount_dir" bash -c "echo root:$(printf "%q" "$v_root_password") | chpasswd"
-  set -x
-
-  # The installer doesn't set the network interfaces, so, for convenience, we do it.
-  #
-  for interface in $(ip addr show | perl -lne '/^\d+: (?!lo:)(\w+)/ && print $1' ); do
-    cat > "$c_installed_os_data_mount_dir/etc/network/interfaces.d/$interface" <<CONF
-  auto $interface
-  iface $interface inet dhcp
-CONF
-  done
-}
-
-function install_operating_system_UbuntuServer {
-  print_step_info_header
-
-  # Patch Subiquity
-  #
-  # We need to patch Subiquity, since it doesn't support virtual block devices. It's not exactly
-  # clear why though, since after patching, the installation works fine.
-  #
-  # See https://bugs.launchpad.net/subiquity/+bug/1811037.
-
-  # Not clear what the number represents, but better to be safe.
-  #
-  local subiquity_id
-  subiquity_id=$(find /snap/subiquity -maxdepth 1 -regextype awk -regex '.*/[[:digit:]]+' -printf '%f')
-
-  unsquashfs -d "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap"
-
-  local zfs_volume_name=${v_temp_volume_device##*/}
-
-  # For a search/replace approach (with helper API), check the history.
-
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/storage_config.py" << DIFF
-575c575
-<             if data.get('DEVPATH', '').startswith('/devices/virtual'):
----
->             if re.match('^/devices/virtual(?!/block/$zfs_volume_name)', data.get('DEVPATH', '')):
-DIFF
-
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/probert/storage.py" << DIFF
-18a19
-> import re
-85c86
-<         return self.devpath.startswith('/devices/virtual/')
----
->         return re.match('^/devices/virtual/(?!block/$zfs_volume_name)', self.devpath)
-DIFF
-
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/curtin/block/__init__.py" << 'DIFF'
-116c116
-<     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md']:
----
->     for dev_type in ['bcache', 'nvme', 'mmcblk', 'cciss', 'mpath', 'md', 'zd']:
-DIFF
-
-  patch -p1 "$c_unpacked_subiquity_dir/lib/python3.6/site-packages/subiquity/ui/views/installprogress.py" << 'DIFF'
-diff lib/python3.6/site-packages/subiquity/ui/views/installprogress.py{.bak,}
-47a48,49
->         self.exit_btn = cancel_btn(
->             _("Exit To Shell"), on_press=self.quit)
-121c123
-<         btns = [self.view_log_btn, self.reboot_btn]
----
->         btns = [self.view_log_btn, self.exit_btn, self.reboot_btn]
-133a136,138
->     def quit(self, btn):
->         self.controller.quit()
-> 
-DIFF
-
-  snap stop subiquity
-  umount "/snap/subiquity/$subiquity_id"
-
-  # Possibly, we could even just symlink, however, since we're running everything in memory, 200+
-  # MB of savings are meaningful.
-  #
-  mksquashfs "$c_unpacked_subiquity_dir" "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap" -noappend -always-use-fragments
-  rm -rf "$c_unpacked_subiquity_dir"
-
-  # O/S Installation
-  #
-  # Subiquity is designed to prevent the user from opening a terminal, which is (to say the least)
-  # incongruent with the audience.
-
-  local dialog_message='The Ubuntu Server installer (Subiquity) will now be launched.
-
-Proceed with the configuration as usual, then, at the partitioning stage:
-
-- select `Use an entire disk`
-- select `'"$v_temp_volume_device"'`
-- `Done` -> `Continue` (ignore the warning)
-- follow through the installation
-- after the security updates are installed, exit to the shell, and follow up with the ZFS installer
-'
-
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
-    whiptail --msgbox "$dialog_message" 30 100
-  fi
-
-  # When not running via `snap start` (which we can't, otherwise it runs in the other terminal),
-  # the binaries are not found, so we manually add them to the path.
-  #
-  # Running with `--bootloader=none` currently crashes Subiquity, possibly due to a bug (missing
-  # `lszdev` binary) - see https://bugs.launchpad.net/subiquity/+bug/1857556.
-  #
-  mount "/var/lib/snapd/snaps/subiquity_$subiquity_id.snap" "/snap/subiquity/$subiquity_id"
-  PATH="/snap/subiquity/$subiquity_id/bin:/snap/subiquity/$subiquity_id/usr/bin:$PATH" snap run subiquity
-
-  swapoff -a
-
-  # See note in install_operating_system(). It's not clear whether this is required on Ubuntu
-  # Server, but it's better not to take risks.
-  #
-  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
-    mount "${v_temp_volume_device}p2" "$c_installed_os_data_mount_dir"
-  fi
-
-  rm -f "$c_installed_os_data_mount_dir"/swap.img
-}
-
 function sync_os_temp_installation_dir_to_rpool {
   print_step_info_header
 
@@ -1002,10 +906,14 @@ function sync_os_temp_installation_dir_to_rpool {
   umount "$c_installed_os_data_mount_dir"
 }
 
-function destroy_temp_volume {
+function remove_temp_partition_and_expand_rpool {
   print_step_info_header
 
-  zfs destroy "$v_rpool_name/os-install-temp"
+  parted -s "${v_selected_disks[0]}" rm 4
+
+  for selected_disk in "${v_selected_disks[@]}"; do
+    zpool online -e "$v_rpool_name" "$selected_disk-part3"
+  done
 }
 
 function prepare_jail {
@@ -1016,12 +924,6 @@ function prepare_jail {
   done
 
   chroot_execute 'echo "nameserver 8.8.8.8" >> /etc/resolv.conf'
-}
-
-function custom_install_operating_system {
-  print_step_info_header
-
-  sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
 # See install_host_packages() for some comments.
@@ -1339,22 +1241,20 @@ ask_pool_tweaks
 
 distro_dependent_invoke "install_host_packages"
 setup_partitions
-create_pools
-create_swap_volume
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
-  distro_dependent_invoke "create_temp_volume"
-
   # Includes the O/S extra configuration, if necessary (network, root pwd, etc.)
   distro_dependent_invoke "install_operating_system"
-
-  sync_os_temp_installation_dir_to_rpool
-  destroy_temp_volume
-  prepare_jail
 else
   custom_install_operating_system
 fi
 
+create_pools
+create_swap_volume
+sync_os_temp_installation_dir_to_rpool
+remove_temp_partition_and_expand_rpool
+
+prepare_jail
 distro_dependent_invoke "install_jail_zfs_packages"
 distro_dependent_invoke "install_and_configure_bootloader"
 sync_efi_partitions

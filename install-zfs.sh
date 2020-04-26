@@ -616,15 +616,13 @@ function install_host_packages_UbuntuServer {
   install_host_packages
 }
 
-function prepare_disks {
+function setup_partitions {
   print_step_info_header
 
-  # PARTITIONS #########################
-
   if [[ $v_free_tail_space -eq 0 ]]; then
-    local tail_space_parameter=0
+    local tail_space_start=0
   else
-    local tail_space_parameter="-${v_free_tail_space}G"
+    local tail_space_start="-${v_free_tail_space}G"
   fi
 
   for selected_disk in "${v_selected_disks[@]}"; do
@@ -634,7 +632,7 @@ function prepare_disks {
 
     sgdisk -n1:1M:+"$c_boot_partition_size" -t1:EF00 "$selected_disk" # EFI boot
     sgdisk -n2:0:+"$c_boot_partition_size"  -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:"$tail_space_parameter"    -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n3:0:"$tail_space_start"        -t3:BF01 "$selected_disk" # Root pool
   done
 
   # The partition symlinks are not immediately created, so we wait.
@@ -668,7 +666,9 @@ function prepare_disks {
   for selected_disk in "${v_selected_disks[@]}"; do
     mkfs.fat -F 32 -n EFI "${selected_disk}-part1"
   done
+}
 
+function create_pools {
   # POOL OPTIONS #######################
 
   local encryption_options=()
@@ -718,9 +718,9 @@ function prepare_disks {
     "${v_bpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
     "$v_bpool_name" $pools_mirror_option "${bpool_disks_partitions[@]}"
+}
 
-  # SWAP ###############################
-
+function create_swap_volume {
   if [[ $v_swap_size -gt 0 ]]; then
     zfs create \
       -V "${v_swap_size}G" -b "$(getconf PAGESIZE)" \
@@ -810,6 +810,8 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
     mount "${v_temp_volume_device}p1" "$c_installed_os_data_mount_dir"
   fi
+
+  rm -f "$c_installed_os_data_mount_dir/swapfile"
 }
 
 function install_operating_system_Debian {
@@ -986,7 +988,7 @@ function sync_os_temp_installation_dir_to_rpool {
   # error. Without checking, it's not clear why this happens, since Subiquity supposedly finished,
   # but it's not a necessary file.
   #
-  rsync -avX --exclude=/swapfile --exclude=/run/motd.dynamic.new --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
+  rsync -avX --exclude=/run/motd.dynamic.new --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
@@ -1027,13 +1029,17 @@ function custom_install_operating_system {
 function install_jail_zfs_packages {
   print_step_info_header
 
-  chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
+  if [[ $v_zfs_08_in_repository != "1" ]]; then
+    chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
 
-  chroot_execute "apt update"
+    chroot_execute "apt update"
 
-  chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
+    chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
 
-  chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+    chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms"
+  fi
+
+  chroot_execute "apt install --yes grub-efi-amd64-signed shim-signed"
 }
 
 function install_jail_zfs_packages_Debian {
@@ -1063,6 +1069,16 @@ function install_jail_zfs_packages_elementary {
   chroot_execute "apt install -y software-properties-common"
 
   install_jail_zfs_packages
+}
+
+function install_jail_zfs_packages_UbuntuServer {
+  print_step_info_header
+
+  if [[ $v_zfs_08_in_repository == "1" ]]; then
+    chroot_execute "apt install --yes zfsutils-linux zfs-modules grub-efi-amd64-signed shim-signed"
+  else
+    install_jail_zfs_packages
+  fi
 }
 
 function install_and_configure_bootloader {
@@ -1322,7 +1338,9 @@ ask_pool_names
 ask_pool_tweaks
 
 distro_dependent_invoke "install_host_packages"
-prepare_disks
+setup_partitions
+create_pools
+create_swap_volume
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
   distro_dependent_invoke "create_temp_volume"

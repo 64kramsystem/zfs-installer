@@ -951,12 +951,13 @@ function install_jail_zfs_packages {
 
     chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms"
   else
-    # Oddly, on a 20.04 live session, the zfs tools are installed, but they are not associated to a package:
+    # Oddly, on a 20.04 Ubuntu Desktop live session, the zfs tools are installed, but they are not
+    # associated to a package:
     #
     # - `dpkg -S $(which zpool)` -> nothing
     # - `aptitude search ~izfs | awk '{print $2}' | xargs echo` -> libzfs2linux zfs-initramfs zfs-zed zfsutils-linux
     #
-    # The pacakges are not installed by default, so we install them.
+    # The packages are not installed by default, so we install them.
     #
     chroot_execute "apt install --yes libzfs2linux zfs-initramfs zfs-zed zfsutils-linux"
   fi

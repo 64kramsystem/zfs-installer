@@ -984,11 +984,11 @@ function sync_os_temp_installation_dir_to_rpool {
   # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
   # ❤️ Perl ❤️
   #
-  # The motd file needs to be excluded because it vanishes during the rsync execution, causing an
-  # error. Without checking, it's not clear why this happens, since Subiquity supposedly finished,
-  # but it's not a necessary file.
+  # The `/run` files excluded happen in the Ubuntu Server installation. Possibly, the entire directory
+  # could be ignored, as it's intended to included ephemeral data.
+  # The `/cdrom` mount is present at least in the Ubuntu Server installation.
   #
-  rsync -avX --exclude=/run/motd.dynamic.new --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
+  rsync -avX --exclude=/cdrom --exclude=/run/motd.dynamic.new --exclude=/run/udev/queue --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 

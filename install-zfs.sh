@@ -810,6 +810,8 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
     mount "${v_temp_volume_device}p1" "$c_installed_os_data_mount_dir"
   fi
+
+  rm -f "$c_installed_os_data_mount_dir/swapfile"
 }
 
 function install_operating_system_Debian {
@@ -986,7 +988,7 @@ function sync_os_temp_installation_dir_to_rpool {
   # error. Without checking, it's not clear why this happens, since Subiquity supposedly finished,
   # but it's not a necessary file.
   #
-  rsync -avX --exclude=/swapfile --exclude=/run/motd.dynamic.new --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
+  rsync -avX --exclude=/run/motd.dynamic.new --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 

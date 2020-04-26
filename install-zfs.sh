@@ -41,7 +41,7 @@ c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]=18.04 [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]=18.04 [LinuxMint]=19 [elementary]=5.1)
 c_boot_partition_size=768M   # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 
@@ -941,6 +941,15 @@ function install_jail_zfs_packages {
     chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
 
     chroot_execute "apt install --yes libelf-dev zfs-initramfs zfs-dkms"
+  else
+    # Oddly, on a 20.04 live session, the zfs tools are installed, but they are not associated to a package:
+    #
+    # - `dpkg -S $(which zpool)` -> nothing
+    # - `aptitude search ~izfs | awk '{print $2}' | xargs echo` -> libzfs2linux zfs-initramfs zfs-zed zfsutils-linux
+    #
+    # The pacakges are not installed by default, so we install them.
+    #
+    chroot_execute "apt install --yes libzfs2linux zfs-initramfs zfs-zed zfsutils-linux"
   fi
 
   chroot_execute "apt install --yes grub-efi-amd64-signed shim-signed"

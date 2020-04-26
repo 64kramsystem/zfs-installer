@@ -14,7 +14,7 @@ I'll keep using it on my systems, so I'll update the code if required by my use 
 
 The program currently supports:
 
-- Ubuntu Desktop 18.04.x Live
+- Ubuntu Desktop 18.04.x/20.04 Live
 - Ubuntu Server 18.04.4 Live
 - Linux Mint 19.x
 - Debian 10.x Live (desktop environment required)
@@ -27,10 +27,6 @@ EFI boot is required (any modern (2011+) system will do); legacy boot is current
 RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot and root pools are mirrored, and the EFI partition is cloned for each disk.
 
 It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
-
-### Ubuntu (Desktop) 20.04 support
-
-The support is coming soon, due to [an Ubiquity issue](https://bugs.launchpad.net/ubuntu/+source/ubiquity/+bug/1875045).
 
 ## Advantages over the Ubuntu built-in installer
 

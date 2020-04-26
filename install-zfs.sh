@@ -886,24 +886,33 @@ function create_swap_volume {
 function sync_os_temp_installation_dir_to_rpool {
   print_step_info_header
 
-  # Extended attributes are not used on a standard Ubuntu installation, however, this needs to be generic.
-  # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
-  # ❤️ Perl ❤️
+  # On Ubuntu Server, `/boot/efi` and `/cdrom` (!!!) are mounted, but they're not needed.
   #
-  # The `/run` files excluded happen in the Ubuntu Server installation. Possibly, the entire directory
-  # could be ignored, as it's intended to included ephemeral data.
-  # The `/cdrom` mount is present in the Ubuntu Server installation, but not in the Ubuntu Desktop.
-  #
-  rsync -avX --exclude=/cdrom --exclude=/run/motd.dynamic.new --exclude=/run/udev/queue --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
-    perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
-    whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
-
   local mount_dir_submounts
   mount_dir_submounts=$(mount | MOUNT_DIR="${c_installed_os_data_mount_dir%/}" perl -lane 'print $F[2] if $F[2] =~ /$ENV{MOUNT_DIR}\//')
 
   for mount_dir in $mount_dir_submounts; do
     umount "$mount_dir"
   done
+
+  # Extended attributes are not used on a standard Ubuntu installation, however, this needs to be generic.
+  # There isn't an exact way to filter out filenames in the rsync output, so we just use a good enough heuristic.
+  # ❤️ Perl ❤️
+  #
+  # `/run` is not needed (with an exception), and in Ubuntu Server it's actually a nuisance, since
+  # some files vanish while syncing. Debian is well-behaved, and `/run` is empty.
+  #
+  rsync -avX --exclude=/run --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
+    perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
+    whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
+
+  mkdir "$c_zfs_mount_dir/run"
+
+  # Required destination of symlink `/etc/resolv.conf`, present in Ubuntu systems (not Debian).
+  #
+  if [[ -d $c_installed_os_data_mount_dir/run/systemd/resolve ]]; then
+    rsync -av --relative "$c_installed_os_data_mount_dir/run/./systemd/resolve" "$c_zfs_mount_dir/run"
+  fi
 
   umount "$c_installed_os_data_mount_dir"
 }

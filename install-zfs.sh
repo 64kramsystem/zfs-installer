@@ -989,7 +989,7 @@ APT'
   chroot_execute "apt update"
 
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
-  chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+  chroot_execute "apt install --yes rsync zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
 }
 
 function install_jail_zfs_packages_elementary {

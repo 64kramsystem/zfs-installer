@@ -55,14 +55,7 @@ GET https://git.io/JelI5 | sudo bash -
 
 then follow the instructions; halfway through the procedure, the GUI installer of the O/S will be launched.
 
-### Ubuntu Server
-
-Ubuntu Server requires a slightly different execution procedure:
-
-- when the installer welcome screen shows up, tap `Ctrl+Alt+F2`,
-- then type `sudo -- bash -c "$(curl -L https://git.io/JelI5)"`.
-
-the rest is the same as the generic procedure.
+In order to open a terminal on Ubuntu Server, tap `Ctrl+Alt+F2`.
 
 ### Unsupported systems/Issues
 

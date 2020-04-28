@@ -53,6 +53,7 @@ c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
 c_os_information_log=$c_log_dir/os_information.log
+c_running_processes_log=$c_log_dir/running_processes.log
 c_disks_log=$c_log_dir/disks.log
 c_zfs_module_version_log=$c_log_dir/updated_module_versions.log
 
@@ -214,6 +215,7 @@ function store_os_distro_information {
 
   # Madness, in order not to force the user to invoke "sudo -E".
   # Assumes that the user runs exactly `sudo bash`; it's not a (current) concern if the user runs off specification.
+  # Not found when running via SSH - inspect the processes for finding this information.
   #
   perl -lne 'BEGIN { $/ = "\0" } print if /^XDG_CURRENT_DESKTOP=/' /proc/"$PPID"/environ >> "$c_os_information_log"
 }
@@ -222,6 +224,13 @@ function store_os_distro_information_Debian {
   store_os_distro_information
 
   echo "DEBIAN_VERSION=$(cat /etc/debian_version)" >> "$c_os_information_log"
+}
+
+# Simplest and most solid way to gather the desktop environment (!).
+# See note in store_os_distro_information().
+#
+function store_running_processes {
+  ps ax --forest > "$c_running_processes_log"
 }
 
 function check_prerequisites {
@@ -1281,6 +1290,7 @@ fi
 activate_debug
 set_distribution_data
 distro_dependent_invoke "store_os_distro_information"
+store_running_processes
 check_prerequisites
 display_intro_banner
 find_suitable_disks

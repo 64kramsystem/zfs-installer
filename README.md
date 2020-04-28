@@ -50,7 +50,7 @@ The disadvantages are:
 Start the live CD of a supported Linux distribution, then open a terminal and execute:
 
 ```sh
-GET https://git.io/JelI5 | sudo bash -
+GET https://git.io/JelI5 | sudo bash
 ```
 
 then follow the instructions; halfway through the procedure, the GUI installer of the O/S will be launched.

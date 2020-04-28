@@ -570,7 +570,7 @@ function install_host_packages_Debian {
     echo "deb http://deb.debian.org/debian buster-backports main contrib" >> /etc/apt/sources.list
     apt update
 
-    apt install --yes -t buster-backports zfs-dkms
+    apt install --yes -t buster-backports zfs-dkms efibootmgr
 
     modprobe zfs
   fi
@@ -992,7 +992,7 @@ APT'
   chroot_execute "apt update"
 
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
-  chroot_execute "apt install --yes zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
+  chroot_execute "apt install --yes rsync zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
 }
 
 function install_jail_zfs_packages_elementary {

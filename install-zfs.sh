@@ -19,10 +19,14 @@ v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily fr
 v_zfs_08_in_repository=      # 1=true, false otherwise (applies only to Ubuntu-based)
 
 # Variables set (indirectly) by the user
+#
+# The passphrase has a special workflow - it's sent to a named pipe (see create_passphrase_named_pipe()).
+# Also note that `ZFS_PASSPHRASE` considers the unset state (see help).
+# The same strategy can possibly be used for `v_root_passwd` (the difference being that is used
+# inside a jail); logging the ZFS commands is enough, for now.
 
 v_bpool_name=
 v_bpool_tweaks=              # array; see defaults below for format
-v_passphrase=                # the corresponding var (ZFS_PASSPHRASE) has special behavior (see below)
 v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_tweaks=              # array; see defaults below for format
@@ -44,6 +48,7 @@ c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]=19 [elementary]=5.1)
 c_boot_partition_size=768M   # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
+c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
@@ -368,6 +373,17 @@ function find_zfs_package_requirements_Debian {
   :
 }
 
+# By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
+# from the logs.
+#
+# The FIFO file is left in the filesystem after the script exits. It's not worth taking care of
+# removing it, since the environment is entirely ephemeral.
+#
+function create_passphrase_named_pipe {
+  rm -f "$c_passphrase_named_pipe"
+  mkfifo "$c_passphrase_named_pipe"
+}
+
 function select_disks {
   print_step_info_header
 
@@ -427,23 +443,25 @@ function ask_root_password_Debian {
 function ask_encryption {
   print_step_info_header
 
+  local passphrase=
+
   set +x
 
   if [[ -v ZFS_PASSPHRASE ]]; then
-    v_passphrase=$ZFS_PASSPHRASE
+    passphrase=$ZFS_PASSPHRASE
   else
     local passphrase_repeat=_
     local passphrase_invalid_message=
 
-    while [[ $v_passphrase != "$passphrase_repeat" || ${#v_passphrase} -lt 8 ]]; do
+    while [[ $passphrase != "$passphrase_repeat" || ${#passphrase} -lt 8 ]]; do
       local dialog_message="${passphrase_invalid_message}Please enter the passphrase (8 chars min.):
 
 Leave blank to keep encryption disabled.
 "
 
-      v_passphrase=$(whiptail --passwordbox "$dialog_message" 30 100 3>&1 1>&2 2>&3)
+      passphrase=$(whiptail --passwordbox "$dialog_message" 30 100 3>&1 1>&2 2>&3)
 
-      if [[ -z $v_passphrase ]]; then
+      if [[ -z $passphrase ]]; then
         break
       fi
 
@@ -452,6 +470,8 @@ Leave blank to keep encryption disabled.
       passphrase_invalid_message="Passphrase too short, or not matching! "
     done
   fi
+
+  echo -n "$passphrase" > "$c_passphrase_named_pipe" &
 
   set -x
 }
@@ -826,15 +846,22 @@ function custom_install_operating_system {
 function create_pools {
   # POOL OPTIONS #######################
 
+  local passphrase
   local encryption_options=()
   local rpool_disks_partitions=()
   local bpool_disks_partitions=()
 
   set +x
 
-  if [[ -n $v_passphrase ]]; then
+  passphrase=$(cat "$c_passphrase_named_pipe")
+
+  if [[ -n $passphrase ]]; then
     encryption_options=(-O "encryption=on" -O "keylocation=prompt" -O "keyformat=passphrase")
   fi
+
+  # Push back for unlogged reuse. Minor inconvenience, but worth :-)
+  #
+  echo -n "$passphrase" > "$c_passphrase_named_pipe" &
 
   set -x
 
@@ -859,13 +886,11 @@ function create_pools {
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
-  set +x
-  echo -n "$v_passphrase" | zpool create \
+  cat "$c_passphrase_named_pipe" | zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
     "$v_rpool_name" $pools_mirror_option "${rpool_disks_partitions[@]}"
-  set -x
 
   # `-d` disable all the pool features (not used here);
   #
@@ -1260,6 +1285,7 @@ check_prerequisites
 display_intro_banner
 find_suitable_disks
 find_zfs_package_requirements
+create_passphrase_named_pipe
 
 select_disks
 distro_dependent_invoke "ask_root_password" --noforce

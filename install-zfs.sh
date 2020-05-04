@@ -902,11 +902,12 @@ function create_pools {
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
-  cat "$c_passphrase_named_pipe" | zpool create \
+  zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
-    "$v_rpool_name" $rpool_raid_option "${rpool_disks_partitions[@]}"
+    "$v_rpool_name" $rpool_raid_option "${rpool_disks_partitions[@]}" \
+    < "$c_passphrase_named_pipe"
 
   # `-d` disable all the pool features (not used here);
   #

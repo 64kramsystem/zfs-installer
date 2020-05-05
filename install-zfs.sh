@@ -21,15 +21,17 @@ v_zfs_08_in_repository=      # 1=true, false otherwise (applies only to Ubuntu-b
 # Variables set (indirectly) by the user
 #
 # The passphrase has a special workflow - it's sent to a named pipe (see create_passphrase_named_pipe()).
-# Also note that `ZFS_PASSPHRASE` considers the unset state (see help).
 # The same strategy can possibly be used for `v_root_passwd` (the difference being that is used
 # inside a jail); logging the ZFS commands is enough, for now.
+#
+# Note that `ZFS_PASSPHRASE` and `ZFS_POOLS_RAID_TYPE` consider the unset state (see help).
 
 v_bpool_name=
 v_bpool_tweaks=              # array; see defaults below for format
 v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_tweaks=              # array; see defaults below for format
+v_pools_raid_type=
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
@@ -170,6 +172,7 @@ The procedure can be entirely automated via environment variables:
 - ZFS_RPOOL_NAME
 - ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `'$c_default_bpool_tweaks'`)
 - ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `'$c_default_rpool_tweaks'`)
+- ZFS_POOLS_RAID_TYPE        : options: blank (striping), `mirror`, `raidz`, `raidz2`, `raidz3`; if unset, it will be asked.
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer); set 0 for no swap
 - ZFS_FREE_TAIL_SPACE        : leave free space at the end of each disk (integer), for example, for a swap partition
@@ -416,8 +419,6 @@ function select_disks {
 
       local dialog_message="Select the ZFS devices.
 
-In the boot pool, multiple selections will be in mirror; in the root pool, 2 devices will be in mirror, 3 or more in RAIDZ.
-
 Devices with mounted partitions, cdroms, and removable devices are not displayed!
 "
       mapfile -t v_selected_disks < <(whiptail --checklist --separate-output "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
@@ -429,6 +430,45 @@ Devices with mounted partitions, cdroms, and removable devices are not displayed
   fi
 
   print_variables v_selected_disks
+}
+
+function select_pools_raid_type {
+  print_step_info_header
+
+  if [[ -v ZFS_POOLS_RAID_TYPE ]]; then
+    v_pools_raid_type=$ZFS_POOLS_RAID_TYPE
+  elif [[ ${#v_selected_disks[@]} -ge 2 ]]; then
+    # Entries preparation.
+
+    local menu_entries_option=(
+      ""      "Striping array" OFF
+      mirror  Mirroring        OFF
+      raidz   RAIDZ1           OFF
+    )
+
+    if [[ ${#v_selected_disks[@]} -ge 3 ]]; then
+      menu_entries_option+=(raidz2 RAIDZ2 OFF)
+    fi
+
+    if [[ ${#v_selected_disks[@]} -ge 4 ]]; then
+      menu_entries_option+=(raidz3 RAIDZ3 OFF)
+    fi
+
+    # Defaults (ultimately, arbitrary). Based on https://calomel.org/zfs_raid_speed_capacity.html.
+
+    if [[ ${#v_selected_disks[@]} -ge 11 ]]; then
+      menu_entries_option[14]=ON
+    elif [[ ${#v_selected_disks[@]} -ge 6 ]]; then
+      menu_entries_option[11]=ON
+    elif [[ ${#v_selected_disks[@]} -ge 5 ]]; then
+      menu_entries_option[8]=ON
+    else
+      menu_entries_option[5]=ON
+    fi
+
+    local dialog_message="Select the pools RAID type."
+    v_pools_raid_type=$(whiptail --radiolist "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
+  fi
 }
 
 function ask_root_password_Debian {
@@ -885,17 +925,6 @@ function create_pools {
     bpool_disks_partitions+=("${selected_disk}-part2")
   done
 
-  if [[ ${#v_selected_disks[@]} -gt 2 ]]; then
-    local rpool_raid_option=raidz
-    local bpool_raid_option=mirror
-  elif [[ ${#v_selected_disks[@]} -eq 2 ]]; then
-    local rpool_raid_option=mirror
-    local bpool_raid_option=mirror
-  else
-    local rpool_raid_option=
-    local bpool_raid_option=
-  fi
-
   # POOLS CREATION #####################
 
   # See https://github.com/zfsonlinux/zfs/wiki/Ubuntu-18.04-Root-on-ZFS for the details.
@@ -910,7 +939,7 @@ function create_pools {
     "${encryption_options[@]}" \
     "${v_rpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
-    "$v_rpool_name" $rpool_raid_option "${rpool_disks_partitions[@]}" \
+    "$v_rpool_name" $v_pools_raid_type "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
 
   # `-d` disable all the pool features (not used here);
@@ -918,7 +947,7 @@ function create_pools {
   zpool create \
     "${v_bpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
-    "$v_bpool_name" $bpool_raid_option "${bpool_disks_partitions[@]}"
+    "$v_bpool_name" $v_pools_raid_type "${bpool_disks_partitions[@]}"
 }
 
 function create_swap_volume {
@@ -1310,6 +1339,7 @@ find_zfs_package_requirements
 create_passphrase_named_pipe
 
 select_disks
+select_pools_raid_type
 distro_dependent_invoke "ask_root_password" --noforce
 ask_encryption
 ask_swap_size

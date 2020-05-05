@@ -29,11 +29,13 @@ As of 20.04, Canonical makes available an experimental ZFS installer on Ubuntu D
 The advantages of this project over the Ubuntu installer are:
 
 1. it supports pools configuration;
-2. it allows customization of the disks setup (including mirroring);
-3. it supports additional features (e.g. encryption);
-4. it supports many more operating systems;
-5. it supports unattended installations, via custom scripts;
-6. it's easy to extend.
+2. it allows specifying the RAID type;
+3. it allows customization of the disk partitions;
+4. it supports additional features (e.g. encryption);
+5. it supports many more operating systems;
+6. it supports unattended installations, via custom scripts;
+7. it installs a convenient trimming job for ZFS pools;
+8. it's easy to extend.
 
 The disadvantages are:
 

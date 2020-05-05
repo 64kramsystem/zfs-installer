@@ -579,7 +579,7 @@ function install_host_packages {
       # Module compilation log: `/var/lib/dkms/zfs/0.8.2/build/make.log` (adjust according to version).
       #
       echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
-      apt install --yes libelf-dev zfs-dkms
+      apt install --yes libelf-dev zfs-dkms efibootmgr
 
       systemctl stop zfs-zed
       modprobe -r zfs

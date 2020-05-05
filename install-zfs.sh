@@ -414,7 +414,9 @@ function select_disks {
         menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
       done
 
-      local dialog_message="Select the ZFS devices (multiple selections will be in mirror).
+      local dialog_message="Select the ZFS devices.
+
+In the boot pool, multiple selections will be in mirror; in the root pool, 2 devices will be in mirror, 3 or more in RAIDZ.
 
 Devices with mounted partitions, cdroms, and removable devices are not displayed!
 "
@@ -586,6 +588,8 @@ function install_host_packages {
     fi
   fi
 
+  apt install --yes efibootmgr
+
   zfs --version > "$c_zfs_module_version_log" 2>&1
 }
 
@@ -599,10 +603,12 @@ function install_host_packages_Debian {
     echo "deb http://deb.debian.org/debian buster-backports main contrib" >> /etc/apt/sources.list
     apt update
 
-    apt install --yes -t buster-backports zfs-dkms efibootmgr
+    apt install --yes -t buster-backports zfs-dkms
 
     modprobe zfs
   fi
+
+  apt install --yes efibootmgr
 
   zfs --version > "$c_zfs_module_version_log" 2>&1
 }
@@ -643,7 +649,7 @@ function install_host_packages_UbuntuServer {
     # this will be a no-op.
     #
     apt update
-    apt install -y "linux-headers-$(uname -r)" efibootmgr
+    apt install -y "linux-headers-$(uname -r)"
 
     install_host_packages
   fi
@@ -879,10 +885,15 @@ function create_pools {
     bpool_disks_partitions+=("${selected_disk}-part2")
   done
 
-  if [[ ${#v_selected_disks[@]} -gt 1 ]]; then
-    local pools_mirror_option=mirror
+  if [[ ${#v_selected_disks[@]} -gt 2 ]]; then
+    local rpool_raid_option=raidz
+    local bpool_raid_option=mirror
+  elif [[ ${#v_selected_disks[@]} -eq 2 ]]; then
+    local rpool_raid_option=mirror
+    local bpool_raid_option=mirror
   else
-    local pools_mirror_option=
+    local rpool_raid_option=
+    local bpool_raid_option=
   fi
 
   # POOLS CREATION #####################
@@ -895,18 +906,19 @@ function create_pools {
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
-  cat "$c_passphrase_named_pipe" | zpool create \
+  zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
-    "$v_rpool_name" $pools_mirror_option "${rpool_disks_partitions[@]}"
+    "$v_rpool_name" $rpool_raid_option "${rpool_disks_partitions[@]}" \
+    < "$c_passphrase_named_pipe"
 
   # `-d` disable all the pool features (not used here);
   #
   zpool create \
     "${v_bpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
-    "$v_bpool_name" $pools_mirror_option "${bpool_disks_partitions[@]}"
+    "$v_bpool_name" $bpool_raid_option "${bpool_disks_partitions[@]}"
 }
 
 function create_swap_volume {

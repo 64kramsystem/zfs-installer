@@ -579,7 +579,7 @@ function install_host_packages {
       # Module compilation log: `/var/lib/dkms/zfs/0.8.2/build/make.log` (adjust according to version).
       #
       echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
-      apt install --yes libelf-dev zfs-dkms efibootmgr
+      apt install --yes libelf-dev zfs-dkms
 
       systemctl stop zfs-zed
       modprobe -r zfs
@@ -587,6 +587,8 @@ function install_host_packages {
       systemctl start zfs-zed
     fi
   fi
+
+  apt install --yes efibootmgr
 
   zfs --version > "$c_zfs_module_version_log" 2>&1
 }
@@ -601,10 +603,12 @@ function install_host_packages_Debian {
     echo "deb http://deb.debian.org/debian buster-backports main contrib" >> /etc/apt/sources.list
     apt update
 
-    apt install --yes -t buster-backports zfs-dkms efibootmgr
+    apt install --yes -t buster-backports zfs-dkms
 
     modprobe zfs
   fi
+
+  apt install --yes efibootmgr
 
   zfs --version > "$c_zfs_module_version_log" 2>&1
 }
@@ -645,10 +649,12 @@ function install_host_packages_UbuntuServer {
     # this will be a no-op.
     #
     apt update
-    apt install -y "linux-headers-$(uname -r)" efibootmgr
+    apt install -y "linux-headers-$(uname -r)"
 
     install_host_packages
   fi
+
+  apt install --yes efibootmgr
 }
 
 function setup_partitions {

@@ -18,7 +18,7 @@ The ZFS version installed is 0.8, which supports native encryption and trimming 
 
 EFI boot is required (any modern (2011+) system will do); legacy boot is currently not supported.
 
-RAID-1 (mirroring) is supported, with any arbitrary number of disks; the boot and root pools are mirrored, and the EFI partition is cloned for each disk.
+All the ZFS RAID types are supported, with any arbitrary number of disks. An EFI partition is created on each disk, for redundancy purposes.
 
 It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
 

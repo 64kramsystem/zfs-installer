@@ -105,11 +105,9 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 
 Other options may be supported, and displayed in the current commandline help, so users are invited to take a look.
 
-## Screenshots
+## Demo
 
-![Devices selection](/screenshots/01-devices_selection.png?raw=true)
-![Encryption](/screenshots/02-encryption.png?raw=true)
-![Boot pool tweaks](/screenshots/03-boot_pool_tweaks.png?raw=true)
+![Demo](/demo/demo.gif?raw=true)
 
 ## Bug reporting/feature requests
 

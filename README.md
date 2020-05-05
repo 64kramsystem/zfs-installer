@@ -33,7 +33,8 @@ The advantages of this project over the Ubuntu installer are:
 3. it supports additional features (e.g. encryption);
 4. it supports many more operating systems;
 5. it supports unattended installations, via custom scripts;
-6. it's easy to extend.
+6. it installs a convenient trimming job for ZFS pools;
+7. it's easy to extend.
 
 The disadvantages are:
 

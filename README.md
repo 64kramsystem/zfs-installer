@@ -64,6 +64,10 @@ Ubuntu Server requires a slightly different execution procedure:
 
 then follow the instructions.
 
+## Demo
+
+![Demo](/demo/demo.gif?raw=true)
+
 ### Unsupported systems/Issues
 
 The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
@@ -104,10 +108,6 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 ```
 
 Other options may be supported, and displayed in the current commandline help, so users are invited to take a look.
-
-## Demo
-
-![Demo](/demo/demo.gif?raw=true)
 
 ## Bug reporting/feature requests
 

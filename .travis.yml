@@ -1,3 +1,4 @@
+---
 dist: bionic
 language: bash
 cache:
@@ -10,4 +11,4 @@ script:
   > /dev/null || true"
 - sudo chmod +x /opt/shellcheck/shellcheck
 - "/opt/shellcheck/shellcheck --version"
-- "/opt/shellcheck/shellcheck install-zfs.sh"
+- "/opt/shellcheck/shellcheck $(grep -lzP '^#!/bin/\\w+sh' -r .)"

@@ -4,12 +4,6 @@
 
 ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
 
-## Status
-
-Due to the low popularity, the project is **inactive**.
-
-I'll keep using it on my systems, so I'll update the code if required by my use case (Ubuntu Desktop), however, I likely won't implement new features, or add support for newer versions of the operating systems.
-
 ## Requirements and functionality
 
 The program currently supports:
@@ -64,6 +58,10 @@ Ubuntu Server requires a slightly different execution procedure:
 
 then follow the instructions.
 
+## Demo
+
+![Demo](/demo/demo.gif?raw=true)
+
 ### Unsupported systems/Issues
 
 The Ubuntu Server alternate (non-live) version is not supported, as it's based on the Busybox environment, which lacks several tools used in the installer (apt, rsync...).
@@ -104,12 +102,6 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 ```
 
 Other options may be supported, and displayed in the current commandline help, so users are invited to take a look.
-
-## Screenshots
-
-![Devices selection](/screenshots/01-devices_selection.png?raw=true)
-![Encryption](/screenshots/02-encryption.png?raw=true)
-![Boot pool tweaks](/screenshots/03-boot_pool_tweaks.png?raw=true)
 
 ## Bug reporting/feature requests
 

@@ -1356,14 +1356,18 @@ setup_partitions
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
   # Includes the O/S extra configuration, if necessary (network, root pwd, etc.)
   distro_dependent_invoke "install_operating_system"
+
+  create_pools
+  create_swap_volume
+  sync_os_temp_installation_dir_to_rpool
+  remove_temp_partition_and_expand_rpool
 else
+  create_pools
+  create_swap_volume
+  remove_temp_partition_and_expand_rpool
+
   custom_install_operating_system
 fi
-
-create_pools
-create_swap_volume
-sync_os_temp_installation_dir_to_rpool
-remove_temp_partition_and_expand_rpool
 
 prepare_jail
 distro_dependent_invoke "install_jail_zfs_packages"

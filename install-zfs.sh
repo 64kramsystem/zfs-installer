@@ -668,7 +668,7 @@ function install_host_packages_UbuntuServer {
   print_step_info_header
 
   if [[ $v_zfs_08_in_repository == "1" ]]; then
-    apt install --yes zfsutils-linux
+    apt install --yes zfsutils-linux efibootmgr
 
     zfs --version > "$c_zfs_module_version_log" 2>&1
   elif [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
@@ -692,6 +692,8 @@ function install_host_packages_UbuntuServer {
     apt install -y "linux-headers-$(uname -r)"
 
     install_host_packages
+  else
+    apt install --yes efibootmgr
   fi
 }
 

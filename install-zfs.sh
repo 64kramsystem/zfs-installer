@@ -596,12 +596,18 @@ function ask_pool_names {
 function ask_pool_tweaks {
   print_step_info_header
 
-  local bpool_tweaks_message='Insert the tweaks for the boot pool'
+  local bpool_tweaks_message='Insert the tweaks for the boot pool
+
+The option `-O devices=off` is already set, and must not be specified.'
+
   local raw_bpool_tweaks=${ZFS_BPOOL_TWEAKS:-$(whiptail --inputbox "$bpool_tweaks_message" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)}
 
   mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$raw_bpool_tweaks")
 
-  local rpool_tweaks_message='Insert the tweaks for the root pool'
+  local rpool_tweaks_message='Insert the tweaks for the root pool
+
+The option `-O devices=off` is already set, and must not be specified.'
+
   local raw_rpool_tweaks=${ZFS_RPOOL_TWEAKS:-$(whiptail --inputbox "$rpool_tweaks_message" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)}
 
   mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$raw_rpool_tweaks")

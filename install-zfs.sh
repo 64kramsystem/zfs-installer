@@ -1016,6 +1016,7 @@ function remove_temp_partition_and_expand_rpool {
   for selected_disk in "${v_selected_disks[@]}"; do
     parted -s "$selected_disk" rm 4
     parted -s "$selected_disk" unit s resizepart 3 -- "$resize_reference"
+    udevadm settle --timeout "$c_udevadm_settle_timeout" || true
     zpool online -e "$v_rpool_name" "$selected_disk-part3"
   done
 }

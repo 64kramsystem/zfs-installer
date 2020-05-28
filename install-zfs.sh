@@ -5,7 +5,6 @@
 #
 # - SC2015: <condition> && <operation> || true
 # - SC2016: annoying warning about using single quoted strings with characters used for interpolation
-# - SC2034: triggers a bug on the `-v` test (see https://git.io/Jenyu)
 
 set -o errexit
 set -o pipefail
@@ -241,8 +240,6 @@ function check_prerequisites {
 
   local distro_version_regex=\\b${v_linux_version//./\\.}\\b
 
-  # shellcheck disable=SC2116 # `=~ $(echo ...)` causes a warning; see https://git.io/Je2QP.
-  #
   if [[ ! -d /sys/firmware/efi ]]; then
     echo 'System firmware directory not found; make sure to boot in EFI mode!'
     exit 1

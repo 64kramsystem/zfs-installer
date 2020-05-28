@@ -5,7 +5,6 @@
 #
 # - SC2015: <condition> && <operation> || true
 # - SC2016: annoying warning about using single quoted strings with characters used for interpolation
-# - SC2034: triggers a bug on the `-v` test (see https://git.io/Jenyu)
 
 set -o errexit
 set -o pipefail
@@ -241,8 +240,6 @@ function check_prerequisites {
 
   local distro_version_regex=\\b${v_linux_version//./\\.}\\b
 
-  # shellcheck disable=SC2116 # `=~ $(echo ...)` causes a warning; see https://git.io/Je2QP.
-  #
   if [[ ! -d /sys/firmware/efi ]]; then
     echo 'System firmware directory not found; make sure to boot in EFI mode!'
     exit 1
@@ -945,8 +942,7 @@ function create_pools {
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
-  # shellcheck disable=SC2086 # quoting $v_pools_raid_type; barring invalid user input, the values are guaranteed not to
-  # need quoting.
+  # shellcheck disable=SC2086 # TODO: convert v_pools_raid_type to array, and quote
   zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_tweaks[@]}" \
@@ -956,7 +952,7 @@ function create_pools {
 
   # `-d` disable all the pool features (not used here);
   #
-  # shellcheck disable=SC2086 # see above
+  # shellcheck disable=SC2086 # TODO: See above
   zpool create \
     "${v_bpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \

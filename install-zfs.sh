@@ -942,8 +942,7 @@ function create_pools {
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
-  # shellcheck disable=SC2086 # quoting $v_pools_raid_type; barring invalid user input, the values are guaranteed not to
-  # need quoting.
+  # shellcheck disable=SC2086 # TODO: convert v_pools_raid_type to array, and quote
   zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_tweaks[@]}" \
@@ -953,7 +952,7 @@ function create_pools {
 
   # `-d` disable all the pool features (not used here);
   #
-  # shellcheck disable=SC2086 # see above
+  # shellcheck disable=SC2086 # TODO: See above
   zpool create \
     "${v_bpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \

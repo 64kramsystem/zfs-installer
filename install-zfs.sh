@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2015,SC2016,SC2034
+# shellcheck disable=SC2015,SC2016
 
 # Shellcheck issue descriptions:
 #
@@ -714,6 +714,12 @@ function setup_partitions {
   fi
 
   for selected_disk in "${v_selected_disks[@]}"; do
+    # wipefs doesn't fully wipe ZFS labels.
+    #
+    find "$(dirname "$selected_disk")" -name "$(basename "$selected_disk")-part*" -exec bash -c '
+      zpool labelclear -f "$1" 2> /dev/null || true
+    ' _ {} \;
+
     # More thorough than `sgdisk --zap-all`.
     #
     wipefs --all "$selected_disk"

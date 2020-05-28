@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2015,SC2016,SC2034
+# shellcheck disable=SC2015,SC2016
 
 # Shellcheck issue descriptions:
 #

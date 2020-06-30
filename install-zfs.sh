@@ -378,8 +378,9 @@ function find_zfs_package_requirements {
 }
 
 function find_zfs_package_requirements_Debian {
-  # Do nothing - ZFS packages are handled in a specific way.
-  :
+  # Only update apt; in this case, ZFS packages are handled in a specific way.
+
+  apt update
 }
 
 # By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
@@ -1350,7 +1351,7 @@ store_running_processes
 check_prerequisites
 display_intro_banner
 find_suitable_disks
-find_zfs_package_requirements
+distro_dependent_invoke "find_zfs_package_requirements"
 create_passphrase_named_pipe
 
 select_disks

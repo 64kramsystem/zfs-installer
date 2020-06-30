@@ -387,6 +387,17 @@ function find_zfs_package_requirements_Debian {
   apt update
 }
 
+# Mint 20 has the CDROM repository enabled, but apt fails when updating due to it (or possibly due
+# to it being incorrectly setup).
+#
+function find_zfs_package_requirements_Linuxmint {
+  print_step_info_header
+
+  perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
+
+  find_zfs_package_requirements
+}
+
 # By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
 # from the logs.
 #

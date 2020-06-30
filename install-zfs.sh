@@ -348,6 +348,9 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
   print_variables v_suitable_disks
 }
 
+# REQUIREMENT: it must be ensured that, for any distro, `apt update` is invoked at this step, as
+# subsequent steps rely on it.
+#
 # There are three parameters:
 #
 # 1. the tools are preinstalled (ie. Ubuntu Desktop based);
@@ -360,8 +363,6 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
 function find_zfs_package_requirements {
   print_step_info_header
 
-  # WATCH OUT. This is assumed by code in later functions.
-  #
   apt update
 
   local zfs_package_version

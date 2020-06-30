@@ -41,12 +41,15 @@ v_temp_volume_device=        # /dev/zdN; scope: setup_partitions -> sync_os_temp
 v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
 
 # Constants
+#
+# Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
+# specific to it.
 
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20" [elementary]=5.1)
 c_boot_partition_size=768M   # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
@@ -658,6 +661,16 @@ function install_host_packages_Debian {
   apt install --yes efibootmgr
 
   zfs --version > "$c_zfs_module_version_log" 2>&1
+}
+
+# Differently from Ubuntu, Mint doesn't have the package installed in the live version.
+#
+function install_host_packages_Linuxmint {
+  print_step_info_header
+
+  apt install --yes zfsutils-linux
+
+  install_host_packages
 }
 
 function install_host_packages_elementary {

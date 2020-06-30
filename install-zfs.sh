@@ -1,11 +1,10 @@
 #!/bin/bash
-# shellcheck disable=SC2015,SC2016,SC2034
+# shellcheck disable=SC2015,SC2016
 
 # Shellcheck issue descriptions:
 #
 # - SC2015: <condition> && <operation> || true
 # - SC2016: annoying warning about using single quoted strings with characters used for interpolation
-# - SC2034: triggers a bug on the `-v` test (see https://git.io/Jenyu)
 
 set -o errexit
 set -o pipefail
@@ -42,12 +41,15 @@ v_temp_volume_device=        # /dev/zdN; scope: setup_partitions -> sync_os_temp
 v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
 
 # Constants
+#
+# Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
+# specific to it.
 
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20" [elementary]=5.1)
 c_boot_partition_size=768M   # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
@@ -241,8 +243,6 @@ function check_prerequisites {
 
   local distro_version_regex=\\b${v_linux_version//./\\.}\\b
 
-  # shellcheck disable=SC2116 # `=~ $(echo ...)` causes a warning; see https://git.io/Je2QP.
-  #
   if [[ ! -d /sys/firmware/efi ]]; then
     echo 'System firmware directory not found; make sure to boot in EFI mode!'
     exit 1
@@ -351,6 +351,9 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
   print_variables v_suitable_disks
 }
 
+# REQUIREMENT: it must be ensured that, for any distro, `apt update` is invoked at this step, as
+# subsequent steps rely on it.
+#
 # There are three parameters:
 #
 # 1. the tools are preinstalled (ie. Ubuntu Desktop based);
@@ -363,8 +366,6 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
 function find_zfs_package_requirements {
   print_step_info_header
 
-  # WATCH OUT. This is assumed by code in later functions.
-  #
   apt update
 
   local zfs_package_version
@@ -381,8 +382,20 @@ function find_zfs_package_requirements {
 }
 
 function find_zfs_package_requirements_Debian {
-  # Do nothing - ZFS packages are handled in a specific way.
-  :
+  # Only update apt; in this case, ZFS packages are handled in a specific way.
+
+  apt update
+}
+
+# Mint 20 has the CDROM repository enabled, but apt fails when updating due to it (or possibly due
+# to it being incorrectly setup).
+#
+function find_zfs_package_requirements_Linuxmint {
+  print_step_info_header
+
+  perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
+
+  find_zfs_package_requirements
 }
 
 # By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
@@ -596,11 +609,19 @@ function ask_pool_names {
 function ask_pool_tweaks {
   print_step_info_header
 
-  local raw_bpool_tweaks=${ZFS_BPOOL_TWEAKS:-$(whiptail --inputbox "Insert the tweaks for the boot pool" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)}
+  local bpool_tweaks_message='Insert the tweaks for the boot pool
+
+The option `-O devices=off` is already set, and must not be specified.'
+
+  local raw_bpool_tweaks=${ZFS_BPOOL_TWEAKS:-$(whiptail --inputbox "$bpool_tweaks_message" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)}
 
   mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$raw_bpool_tweaks")
 
-  local raw_rpool_tweaks=${ZFS_RPOOL_TWEAKS:-$(whiptail --inputbox "Insert the tweaks for the root pool" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)}
+  local rpool_tweaks_message='Insert the tweaks for the root pool
+
+The option `-O devices=off` is already set, and must not be specified.'
+
+  local raw_rpool_tweaks=${ZFS_RPOOL_TWEAKS:-$(whiptail --inputbox "$rpool_tweaks_message" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)}
 
   mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$raw_rpool_tweaks")
 
@@ -651,6 +672,16 @@ function install_host_packages_Debian {
   apt install --yes efibootmgr
 
   zfs --version > "$c_zfs_module_version_log" 2>&1
+}
+
+# Differently from Ubuntu, Mint doesn't have the package installed in the live version.
+#
+function install_host_packages_Linuxmint {
+  print_step_info_header
+
+  apt install --yes zfsutils-linux
+
+  install_host_packages
 }
 
 function install_host_packages_elementary {
@@ -709,6 +740,12 @@ function setup_partitions {
   fi
 
   for selected_disk in "${v_selected_disks[@]}"; do
+    # wipefs doesn't fully wipe ZFS labels.
+    #
+    find "$(dirname "$selected_disk")" -name "$(basename "$selected_disk")-part*" -exec bash -c '
+      zpool labelclear -f "$1" 2> /dev/null || true
+    ' _ {} \;
+
     # More thorough than `sgdisk --zap-all`.
     #
     wipefs --all "$selected_disk"
@@ -937,8 +974,7 @@ function create_pools {
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
-  # shellcheck disable=SC2086 # quoting $v_pools_raid_type; barring invalid user input, the values are guaranteed not to
-  # need quoting.
+  # shellcheck disable=SC2086 # TODO: convert v_pools_raid_type to array, and quote
   zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_tweaks[@]}" \
@@ -948,7 +984,7 @@ function create_pools {
 
   # `-d` disable all the pool features (not used here);
   #
-  # shellcheck disable=SC2086 # see above
+  # shellcheck disable=SC2086 # TODO: See above
   zpool create \
     "${v_bpool_tweaks[@]}" \
     -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
@@ -1340,7 +1376,7 @@ store_running_processes
 check_prerequisites
 display_intro_banner
 find_suitable_disks
-find_zfs_package_requirements
+distro_dependent_invoke "find_zfs_package_requirements"
 create_passphrase_named_pipe
 
 select_disks

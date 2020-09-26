@@ -898,7 +898,7 @@ function install_operating_system_UbuntuServer {
 
   local dialog_message='You'\''ll now need to run the Ubuntu Server installer (Subiquity).
 
-Switch back to the original terminal (Ctrl+Shift+F1), then proceed with the configuration as usual.
+Switch back to the original terminal (Ctrl+Alt+F1), then proceed with the configuration as usual.
 
 When the update option is presented, choose to update Subiquity to the latest version.
 

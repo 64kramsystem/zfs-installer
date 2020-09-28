@@ -6,7 +6,7 @@ cache:
   - "/opt/shellcheck"
 script:
 - mkdir -p /opt/shellcheck
-- "[[ ! -e /opt/shellcheck/shellcheck ]] && wget -qO- https://storage.googleapis.com/shellcheck/shellcheck-stable.linux.x86_64.tar.xz
+- "[[ ! -e /opt/shellcheck/shellcheck ]] && wget -qO- https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz
   | tar -xJv -O shellcheck-stable/shellcheck | sudo tee /opt/shellcheck/shellcheck
   > /dev/null || true"
 - sudo chmod +x /opt/shellcheck/shellcheck

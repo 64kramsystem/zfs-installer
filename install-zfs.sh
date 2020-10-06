@@ -1228,6 +1228,15 @@ UNIT"
   chroot_execute "echo $v_bpool_name /boot zfs nodev,relatime,x-systemd.requires=zfs-import-$v_bpool_name.service 0 0 >> /etc/fstab"
 }
 
+# This step is important in cases where the keyboard layout is not the standard one.
+# See issue https://github.com/saveriomiroddi/zfs-installer/issues/110.
+#
+function update_initramfs {
+  print_step_info_header
+
+  chroot_execute "update-initramfs -u"
+}
+
 function update_zed_cache_Debian {
   chroot_execute "mkdir /etc/zfs/zfs-list.cache"
   chroot_execute "touch /etc/zfs/zfs-list.cache/$v_rpool_name"
@@ -1412,6 +1421,7 @@ distro_dependent_invoke "install_jail_zfs_packages"
 distro_dependent_invoke "install_and_configure_bootloader"
 sync_efi_partitions
 configure_boot_pool_import
+update_initramfs
 distro_dependent_invoke "update_zed_cache" --noforce
 configure_pools_trimming
 configure_remaining_settings

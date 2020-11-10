@@ -560,7 +560,7 @@ Supported formats: '512M', '3G'" 30 100 $c_default_boot_partition_size 3>&1 1>&2
     done
   fi
 
-  print_variables v_swap_size
+  print_variables v_boot_partition_size
 }
 
 function ask_swap_size {

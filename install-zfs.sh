@@ -774,9 +774,9 @@ function setup_partitions {
     wipefs --all "$selected_disk"
 
     sgdisk -n1:1M:+"$c_efi_system_partition_size" -t1:EF00 "$selected_disk" # EFI boot
-    sgdisk -n2:0:+"$v_boot_partition_size"    -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:"$temporary_partition_start" -t3:BF01 "$selected_disk" # Root pool
-    sgdisk -n4:0:"$tail_space_start"          -t4:8300 "$selected_disk" # Temporary partition
+    sgdisk -n2:0:+"$v_boot_partition_size"        -t2:BF01 "$selected_disk" # Boot pool
+    sgdisk -n3:0:"$temporary_partition_start"     -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n4:0:"$tail_space_start"              -t4:8300 "$selected_disk" # Temporary partition
   done
 
   # The partition symlinks are not immediately created, so we wait.

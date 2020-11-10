@@ -25,6 +25,7 @@ v_zfs_08_in_repository=      # 1=true, false otherwise (applies only to Ubuntu-b
 #
 # Note that `ZFS_PASSPHRASE` and `ZFS_POOLS_RAID_TYPE` consider the unset state (see help).
 
+v_boot_partition_size=       # Integer number with `M` or `G` suffix
 v_bpool_name=
 v_bpool_tweaks=              # array; see defaults below for format
 v_root_password=             # Debian-only
@@ -45,12 +46,12 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 # Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
 # specific to it.
 
+c_default_boot_partition_size=768M # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20" [elementary]=5.1)
-c_boot_partition_size=768M   # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 
@@ -167,6 +168,7 @@ The procedure can be entirely automated via environment variables:
 
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
+- ZFS_BOOT_PARTITION_SIZE    : integer number with `M` or `G` suffix (defaults to `'$c_default_boot_partition_size'`)
 - ZFS_ENCRYPT_RPOOL          : set 1 to encrypt the pool
 - ZFS_PASSPHRASE             : set non-blank to encrypt the pool, and blank not to. if unset, it will be asked.
 - ZFS_DEBIAN_ROOT_PASSWORD
@@ -540,6 +542,26 @@ Leave blank to keep encryption disabled.
   set -x
 }
 
+function ask_boot_partition_size {
+  print_step_info_header
+
+  if [[ ${ZFS_BOOT_PARTITION_SIZE:-} != "" ]]; then
+    v_boot_partition_size=$ZFS_BOOT_PARTITION_SIZE
+  else
+   local boot_partition_size_invalid_message=
+
+    while [[ ! $v_boot_partition_size =~ ^[0-9]+[MGmg]$ ]]; do
+      v_boot_partition_size=$(whiptail --inputbox "${boot_partition_size_invalid_message}Enter the boot partition size.
+
+Supported formats: '512M', '3G'" 30 100 $c_default_boot_partition_size 3>&1 1>&2 2>&3)
+
+      boot_partition_size_invalid_message="Invalid boot partition size! "
+    done
+  fi
+
+  print_variables v_swap_size
+}
+
 function ask_swap_size {
   print_step_info_header
 
@@ -750,8 +772,8 @@ function setup_partitions {
     #
     wipefs --all "$selected_disk"
 
-    sgdisk -n1:1M:+"$c_boot_partition_size"   -t1:EF00 "$selected_disk" # EFI boot
-    sgdisk -n2:0:+"$c_boot_partition_size"    -t2:BF01 "$selected_disk" # Boot pool
+    sgdisk -n1:1M:+"$v_boot_partition_size"   -t1:EF00 "$selected_disk" # EFI boot
+    sgdisk -n2:0:+"$v_boot_partition_size"    -t2:BF01 "$selected_disk" # Boot pool
     sgdisk -n3:0:"$temporary_partition_start" -t3:BF01 "$selected_disk" # Root pool
     sgdisk -n4:0:"$tail_space_start"          -t4:8300 "$selected_disk" # Temporary partition
   done
@@ -1392,6 +1414,7 @@ select_disks
 select_pools_raid_type
 distro_dependent_invoke "ask_root_password" --noforce
 ask_encryption
+ask_boot_partition_size
 ask_swap_size
 ask_free_tail_space
 ask_pool_names

@@ -47,7 +47,7 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 # specific to it.
 
 c_efi_system_partition_size=512M
-c_default_boot_partition_size=768M # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
+c_default_boot_partition_size=2048M
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt

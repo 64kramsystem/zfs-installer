@@ -46,6 +46,7 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 # Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
 # specific to it.
 
+c_efi_system_partition_size=512M
 c_default_boot_partition_size=768M # while 512M are enough for a few kernels, the Ubuntu updater complains after a couple
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
@@ -772,7 +773,7 @@ function setup_partitions {
     #
     wipefs --all "$selected_disk"
 
-    sgdisk -n1:1M:+"$v_boot_partition_size"   -t1:EF00 "$selected_disk" # EFI boot
+    sgdisk -n1:1M:+"$c_efi_system_partition_size" -t1:EF00 "$selected_disk" # EFI boot
     sgdisk -n2:0:+"$v_boot_partition_size"    -t2:BF01 "$selected_disk" # Boot pool
     sgdisk -n3:0:"$temporary_partition_start" -t3:BF01 "$selected_disk" # Root pool
     sgdisk -n4:0:"$tail_space_start"          -t4:8300 "$selected_disk" # Temporary partition

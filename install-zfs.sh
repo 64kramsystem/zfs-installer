@@ -55,6 +55,7 @@ c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20" [elementary]=5.1)
 c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
+c_passphrase_named_pipe_2=$(dirname "$(mktemp)")/zfs-installer.pp.2.fifo
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
@@ -408,8 +409,8 @@ function find_zfs_package_requirements_Linuxmint {
 # removing it, since the environment is entirely ephemeral.
 #
 function create_passphrase_named_pipe {
-  rm -f "$c_passphrase_named_pipe"
-  mkfifo "$c_passphrase_named_pipe"
+  rm -f "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
+  mkfifo "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
 }
 
 function select_disks {
@@ -539,6 +540,7 @@ Leave blank to keep encryption disabled.
   fi
 
   echo -n "$passphrase" > "$c_passphrase_named_pipe" &
+  echo -n "$passphrase" > "$c_passphrase_named_pipe_2" &
 
   set -x
 }
@@ -1068,9 +1070,19 @@ function remove_temp_partition_and_expand_rpool {
     local resize_reference=-${v_free_tail_space}G
   fi
 
+  zpool export -a
+
   for selected_disk in "${v_selected_disks[@]}"; do
     parted -s "$selected_disk" rm 4
     parted -s "$selected_disk" unit s resizepart 3 -- "$resize_reference"
+  done
+
+  # For unencrypted pools, `-l` doesn't interfere.
+  #
+  zpool import -l -R "$c_zfs_mount_dir" "$v_rpool_name" < "$c_passphrase_named_pipe_2"
+  zpool import -l -R "$c_zfs_mount_dir" "$v_bpool_name"
+
+  for selected_disk in "${v_selected_disks[@]}"; do
     zpool online -e "$v_rpool_name" "$selected_disk-part3"
   done
 }

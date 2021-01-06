@@ -134,8 +134,6 @@ The [ZFS Discuss forum](https://zfsonlinux.topicbox.com/groups/zfs-discuss) is a
 
 The workflow of this program is based on the official ZFS wiki procedure, so, many thanks to the ZFS team.
 
-Many thanks also to Gerard Beekmans for reaching out and giving useful feedback and help.
-
 As my other open source work and [technical writing](https://saveriomiroddi.github.io), this project is sponsored by [Ticketsolve](https://ticketsolve.com).
 
 [BS img]: https://travis-ci.org/saveriomiroddi/zfs-installer.svg?branch=master

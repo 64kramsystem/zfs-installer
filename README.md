@@ -4,6 +4,17 @@
 
 ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
 
+- [Requirements and functionality](#requirements-and-functionality)
+- [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
+- [Instructions](#instructions)
+  - [Ubuntu Server](#ubuntu-server)
+- [Demo](#demo)
+  - [Unsupported systems/Issues](#unsupported-systemsissues)
+  - [Unattended installations](#unattended-installations)
+- [Bug reporting/feature requests](#bug-reportingfeature-requests)
+- [Help](#help)
+- [Credits](#credits)
+
 ## Requirements and functionality
 
 The program currently supports:
@@ -113,11 +124,15 @@ Both for feature requests and bugs, [open a GitHub issue](https://github.com/sav
 
 For issues, also attach the content of the directory `/tmp/zfs-installer`. It doesn't contain any information aside what required for performing the installation; it can be trivially inspected, as it's a standard Bash debug output.
 
+## Help
+
+For requests that are not strictly bugs (confirmed or suspected), feel free to post on the project [discussion board](https://github.com/saveriomiroddi/zfs-installer/discussions). Differently from bugs/feature requests, replies are not guaranteed, however, even if there is no official reply, somebody else may still help.
+
+The [ZFS Discuss forum](https://zfsonlinux.topicbox.com/groups/zfs-discuss) is also a good place where to post this type of requests.
+
 ## Credits
 
 The workflow of this program is based on the official ZFS wiki procedure, so, many thanks to the ZFS team.
-
-Many thanks also to Gerard Beekmans for reaching out and giving useful feedback and help.
 
 As my other open source work and [technical writing](https://saveriomiroddi.github.io), this project is sponsored by [Ticketsolve](https://ticketsolve.com).
 

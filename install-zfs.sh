@@ -46,14 +46,14 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 # Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
 # specific to it.
 
-c_efi_system_partition_size=512M
-c_default_boot_partition_size=2048M
+c_efi_system_partition_size=512 # megabytes
+c_default_boot_partition_size=2048 # megabytes
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20" [elementary]=5.1)
-c_temporary_volume_size=12G  # large enough; Debian, for example, takes ~8 GiB.
+c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 c_passphrase_named_pipe_2=$(dirname "$(mktemp)")/zfs-installer.pp.2.fifo
 
@@ -170,7 +170,7 @@ The procedure can be entirely automated via environment variables:
 
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
-- ZFS_BOOT_PARTITION_SIZE    : integer number with `M` or `G` suffix (defaults to `'$c_default_boot_partition_size'`)
+- ZFS_BOOT_PARTITION_SIZE    : integer number with `M` or `G` suffix (defaults to `'${c_default_boot_partition_size}M'`)
 - ZFS_ENCRYPT_RPOOL          : set 1 to encrypt the pool
 - ZFS_PASSPHRASE             : set non-blank to encrypt the pool, and blank not to. if unset, it will be asked.
 - ZFS_DEBIAN_ROOT_PASSWORD
@@ -556,7 +556,7 @@ function ask_boot_partition_size {
     while [[ ! $v_boot_partition_size =~ ^[0-9]+[MGmg]$ ]]; do
       v_boot_partition_size=$(whiptail --inputbox "${boot_partition_size_invalid_message}Enter the boot partition size.
 
-Supported formats: '512M', '3G'" 30 100 $c_default_boot_partition_size 3>&1 1>&2 2>&3)
+Supported formats: '512M', '3G'" 30 100 ${c_default_boot_partition_size}M 3>&1 1>&2 2>&3)
 
       boot_partition_size_invalid_message="Invalid boot partition size! "
     done
@@ -756,7 +756,7 @@ function install_host_packages_UbuntuServer {
 function setup_partitions {
   print_step_info_header
 
-  local temporary_partition_start=-$((${c_temporary_volume_size:0:-1} + v_free_tail_space))G
+  local temporary_partition_start=-$((c_temporary_volume_size + v_free_tail_space))G
 
   if [[ $v_free_tail_space -eq 0 ]]; then
     local tail_space_start=0
@@ -775,10 +775,10 @@ function setup_partitions {
     #
     wipefs --all "$selected_disk"
 
-    sgdisk -n1:1M:+"$c_efi_system_partition_size" -t1:EF00 "$selected_disk" # EFI boot
-    sgdisk -n2:0:+"$v_boot_partition_size"        -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:"$temporary_partition_start"     -t3:BF01 "$selected_disk" # Root pool
-    sgdisk -n4:0:"$tail_space_start"              -t4:8300 "$selected_disk" # Temporary partition
+    sgdisk -n1:1M:+"${c_efi_system_partition_size}M" -t1:EF00 "$selected_disk" # EFI boot
+    sgdisk -n2:0:+"$v_boot_partition_size"           -t2:BF01 "$selected_disk" # Boot pool
+    sgdisk -n3:0:"$temporary_partition_start"        -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n4:0:"$tail_space_start"                 -t4:8300 "$selected_disk" # Temporary partition
   done
 
   # The partition symlinks are not immediately created, so we wait.

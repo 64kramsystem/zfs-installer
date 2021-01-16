@@ -756,7 +756,7 @@ function install_host_packages_UbuntuServer {
 function setup_partitions {
   print_step_info_header
 
-  local temporary_partition_start=-$((c_temporary_volume_size + v_free_tail_space))G
+  local root_partition_start=-$((c_temporary_volume_size + v_free_tail_space))G
 
   if [[ $v_free_tail_space -eq 0 ]]; then
     local tail_space_start=0
@@ -777,7 +777,7 @@ function setup_partitions {
 
     sgdisk -n1:1M:+"${c_efi_system_partition_size}M" -t1:EF00 "$selected_disk" # EFI boot
     sgdisk -n2:0:+"$v_boot_partition_size"           -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:"$temporary_partition_start"        -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n3:0:"$root_partition_start"             -t3:BF01 "$selected_disk" # Root pool
     sgdisk -n4:0:"$tail_space_start"                 -t4:8300 "$selected_disk" # Temporary partition
   done
 

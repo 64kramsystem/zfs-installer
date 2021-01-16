@@ -589,10 +589,18 @@ function ask_free_tail_space {
   if [[ ${ZFS_FREE_TAIL_SPACE:-} != "" ]]; then
     v_free_tail_space=$ZFS_FREE_TAIL_SPACE
   else
-   local tail_space_invalid_message=
+    local tail_space_invalid_message=
+    local tail_space_message="${tail_space_invalid_message}Enter the space in GiB to leave at the end of each disk (0 for none).
+
+If the tail space is less than the space required for the temporary O/S installation, it will be reclaimed after it.
+
+WATCH OUT! In rare cases, the reclamation may cause an error; if this happens, set the tail space to ${c_temporary_volume_size} gigabytes. It's still possible to reclaim the space after the ZFS installation is over.
+
+For detailed informations, see the wiki page: https://github.com/saveriomiroddi/zfs-installer/wiki/Tail-space-reclamation-issue.
+"
 
     while [[ ! $v_free_tail_space =~ ^[0-9]+$ ]]; do
-      v_free_tail_space=$(whiptail --inputbox "${tail_space_invalid_message}Enter the space in GiB to leave at the end of each disk (0 for none):" 30 100 0 3>&1 1>&2 2>&3)
+      v_free_tail_space=$(whiptail --inputbox "$tail_space_message" 30 100 0 3>&1 1>&2 2>&3)
 
       tail_space_invalid_message="Invalid size! "
     done
@@ -756,13 +764,7 @@ function install_host_packages_UbuntuServer {
 function setup_partitions {
   print_step_info_header
 
-  local root_partition_start=-$((c_temporary_volume_size + v_free_tail_space))G
-
-  if [[ $v_free_tail_space -eq 0 ]]; then
-    local tail_space_start=0
-  else
-    local tail_space_start="-${v_free_tail_space}G"
-  fi
+  local required_tail_space=$((v_free_tail_space > c_temporary_volume_size ? v_free_tail_space : c_temporary_volume_size))
 
   for selected_disk in "${v_selected_disks[@]}"; do
     # wipefs doesn't fully wipe ZFS labels.
@@ -777,8 +779,8 @@ function setup_partitions {
 
     sgdisk -n1:1M:+"${c_efi_system_partition_size}M" -t1:EF00 "$selected_disk" # EFI boot
     sgdisk -n2:0:+"$v_boot_partition_size"           -t2:BF01 "$selected_disk" # Boot pool
-    sgdisk -n3:0:"$root_partition_start"             -t3:BF01 "$selected_disk" # Root pool
-    sgdisk -n4:0:"$tail_space_start"                 -t4:8300 "$selected_disk" # Temporary partition
+    sgdisk -n3:0:"-${required_tail_space}G"          -t3:BF01 "$selected_disk" # Root pool
+    sgdisk -n4:0:0                                   -t4:8300 "$selected_disk" # Temporary partition
   done
 
   # The partition symlinks are not immediately created, so we wait.
@@ -1064,27 +1066,33 @@ function sync_os_temp_installation_dir_to_rpool {
 function remove_temp_partition_and_expand_rpool {
   print_step_info_header
 
-  if [[ $v_free_tail_space -eq 0 ]]; then
-    local resize_reference=100%
+  if (( v_free_tail_space < c_temporary_volume_size )); then
+    if [[ $v_free_tail_space -eq 0 ]]; then
+      local resize_reference=100%
+    else
+      local resize_reference=-${v_free_tail_space}G
+    fi
+
+    zpool export -a
+
+    for selected_disk in "${v_selected_disks[@]}"; do
+      parted -s "$selected_disk" rm 4
+      parted -s "$selected_disk" unit s resizepart 3 -- "$resize_reference"
+    done
+
+    # For unencrypted pools, `-l` doesn't interfere.
+    #
+    zpool import -l -R "$c_zfs_mount_dir" "$v_rpool_name" < "$c_passphrase_named_pipe_2"
+    zpool import -l -R "$c_zfs_mount_dir" "$v_bpool_name"
+
+    for selected_disk in "${v_selected_disks[@]}"; do
+      zpool online -e "$v_rpool_name" "$selected_disk-part3"
+    done
   else
-    local resize_reference=-${v_free_tail_space}G
+    for selected_disk in "${v_selected_disks[@]}"; do
+      wipefs --all "$selected_disk-part4"
+    done
   fi
-
-  zpool export -a
-
-  for selected_disk in "${v_selected_disks[@]}"; do
-    parted -s "$selected_disk" rm 4
-    parted -s "$selected_disk" unit s resizepart 3 -- "$resize_reference"
-  done
-
-  # For unencrypted pools, `-l` doesn't interfere.
-  #
-  zpool import -l -R "$c_zfs_mount_dir" "$v_rpool_name" < "$c_passphrase_named_pipe_2"
-  zpool import -l -R "$c_zfs_mount_dir" "$v_bpool_name"
-
-  for selected_disk in "${v_selected_disks[@]}"; do
-    zpool online -e "$v_rpool_name" "$selected_disk-part3"
-  done
 }
 
 function prepare_jail {

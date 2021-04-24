@@ -369,7 +369,7 @@ function find_zfs_package_requirements {
   apt update
 
   local zfs_package_version
-  zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print $1 if /^Version: (\d+\.\d+)\./')
+  zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print /^Version: (\d+\.\d+)/')
 
   if [[ -n $zfs_package_version ]]; then
     if [[ ! $zfs_package_version =~ ^0\. ]]; then

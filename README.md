@@ -98,7 +98,6 @@ The procedure can be entirely automated via environment variables:
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
 - ZFS_PASSPHRASE
-- ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
 - ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `-o ashift=12`)
 - ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD`)

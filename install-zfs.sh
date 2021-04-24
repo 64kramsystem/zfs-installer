@@ -1042,6 +1042,7 @@ function create_pools {
 
   # shellcheck disable=SC2086 # TODO: See above
   zpool create \
+    -o cachefile=/etc/zfs/zpool.cache \
     "${v_bpool_create_options[@]}" \
     -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
     "$c_bpool_name" $v_pools_raid_type "${bpool_disks_partitions[@]}"
@@ -1056,6 +1057,11 @@ function create_swap_volume {
 
     mkswap -f "/dev/zvol/$v_rpool_name/swap"
   fi
+}
+
+function copy_zpool_cache {
+  mkdir -p "$c_zfs_mount_dir/etc/zfs"
+  cp /etc/zfs/zpool.cache "$c_zfs_mount_dir/etc/zfs/"
 }
 
 function sync_os_temp_installation_dir_to_rpool {
@@ -1219,8 +1225,6 @@ function configure_and_update_grub {
 
   chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'        /etc/default/grub"
 
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /'    /etc/default/grub"
-
   # Silence warning during the grub probe (source: https://git.io/JenXF).
   #
   chroot_execute "echo 'GRUB_DISABLE_OS_PROBER=true'                                    >> /etc/default/grub"
@@ -1249,7 +1253,6 @@ function configure_and_update_grub_Debian {
 
   chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'     /etc/default/grub"
 
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /' /etc/default/grub"
   chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)quiet/\$1/'             /etc/default/grub"
   chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                         /etc/default/grub"
 
@@ -1277,32 +1280,6 @@ function sync_efi_partitions {
   chroot_execute "umount /boot/efi"
 }
 
-function configure_boot_pool_import {
-  print_step_info_header
-
-  chroot_execute "cat > /etc/systemd/system/zfs-import-$c_bpool_name.service <<UNIT
-[Unit]
-DefaultDependencies=no
-Before=zfs-import-scan.service
-Before=zfs-import-cache.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStartPre=/bin/sh -c '[ -f /etc/zfs/zpool.cache ] && mv /etc/zfs/zpool.cache /etc/zfs/preboot_zpool.cache || true'
-ExecStart=/sbin/zpool import -N -o cachefile=none $c_bpool_name
-ExecStartPost=/bin/sh -c '[ -f /etc/zfs/preboot_zpool.cache ] && mv /etc/zfs/preboot_zpool.cache /etc/zfs/zpool.cache || true'
-
-[Install]
-WantedBy=zfs-import.target
-UNIT"
-
-  chroot_execute "systemctl enable zfs-import-$c_bpool_name.service"
-
-  chroot_execute "zfs set mountpoint=legacy $c_bpool_name"
-  chroot_execute "echo $c_bpool_name /boot zfs nodev,relatime,x-systemd.requires=zfs-import-$c_bpool_name.service 0 0 >> /etc/fstab"
-}
-
 # This step is important in cases where the keyboard layout is not the standard one.
 # See issue https://github.com/saveriomiroddi/zfs-installer/issues/110.
 #
@@ -1312,47 +1289,54 @@ function update_initramfs {
   chroot_execute "update-initramfs -u"
 }
 
-function update_zed_cache_Debian {
+function fix_filesystem_mount_ordering {
+  print_step_info_header
+
   chroot_execute "mkdir /etc/zfs/zfs-list.cache"
-  chroot_execute "touch /etc/zfs/zfs-list.cache/$v_rpool_name"
+  chroot_execute "touch /etc/zfs/zfs-list.cache/$c_bpool_name /etc/zfs/zfs-list.cache/$v_rpool_name"
   chroot_execute "ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
 
-  # Assumed to be present by the zedlet above, but missing.
+  # Assumed to be present by the zedlet above on Debian, but missing.
   # Filed issue: https://github.com/zfsonlinux/zfs/issues/9945.
   #
   chroot_execute "mkdir /run/lock"
 
+  # It's not clear (based on the help) why it's explicitly run in foreground (`-F`), but backgrounded.
+  #
   chroot_execute "zed -F &"
 
   # We could pool the events via `zpool events -v`, but it's much simpler to just check on the file.
   #
   local success=
 
-  if [[ ! -s "$c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name" ]]; then
-    # Takes around half second on a test VM.
+  if [[ ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$c_bpool_name || ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
+    # For the rpool only, it takes around half second on a test VM.
     #
-    chroot_execute "zfs set canmount=noauto $v_rpool_name"
+    chroot_execute "zfs set canmount=on $c_bpool_name"
+    chroot_execute "zfs set canmount=on $v_rpool_name"
 
     SECONDS=0
 
     while [[ $SECONDS -lt 5 ]]; do
-      if [[ -s "$c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name" ]]; then
+      if [[ ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$c_bpool_name || ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
         success=1
         break
       else
         sleep 0.25
       fi
     done
+  else
+    success=1
   fi
+
+  chroot_execute "pkill zed"
 
   if [[ $success -ne 1 ]]; then
     echo "Error: The ZFS cache hasn't been updated by ZED!"
     exit 1
   fi
 
-  chroot_execute "pkill zed"
-
-  chroot_execute "sed -Ei 's|$c_installed_os_data_mount_dir/?|/|' /etc/zfs/zfs-list.cache/$v_rpool_name"
+  chroot_execute "sed -Ei 's|$c_zfs_mount_dir/?|/|' /etc/zfs/zfs-list.cache/*"
 }
 
 # We don't care about synchronizing with the `fstrim` service for two reasons:
@@ -1482,11 +1466,13 @@ if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
 
   create_pools
   create_swap_volume
+  copy_zpool_cache
   sync_os_temp_installation_dir_to_rpool
   remove_temp_partition_and_expand_rpool
 else
   create_pools
   create_swap_volume
+  copy_zpool_cache
   remove_temp_partition_and_expand_rpool
 
   custom_install_operating_system
@@ -1497,9 +1483,8 @@ distro_dependent_invoke "install_jail_zfs_packages"
 prepare_efi_partition
 distro_dependent_invoke "configure_and_update_grub"
 sync_efi_partitions
-configure_boot_pool_import
 update_initramfs
-distro_dependent_invoke "update_zed_cache" --noforce
+fix_filesystem_mount_ordering
 configure_pools_trimming
 configure_remaining_settings
 

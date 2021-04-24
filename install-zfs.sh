@@ -22,10 +22,10 @@ set -o nounset
 
 v_boot_partition_size=       # Integer number with `M` or `G` suffix
 v_bpool_name=
-v_bpool_tweaks=              # array; see defaults below for format
+v_bpool_create_options=      # array; see defaults below for format
 v_root_password=             # Debian-only
 v_rpool_name=
-v_rpool_tweaks=              # array; see defaults below for format
+v_rpool_create_options=      # array; see defaults below for format
 v_pools_raid_type=
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
@@ -47,10 +47,11 @@ c_ppa=ppa:jonathonf/zfs
 c_efi_system_partition_size=512 # megabytes
 c_default_boot_partition_size=2048 # megabytes
 c_memory_warning_limit=2880 # megabytes; not set to 3072 because on some systems, some RAM is occupied/shared
-c_default_bpool_tweaks=(
+c_default_bpool_create_options=(
   -o ashift=12
+  -O devices=off
 )
-c_default_rpool_tweaks=(
+c_default_rpool_create_options=(
   -o ashift=12
   -O acltype=posixacl
   -O compression=lz4
@@ -58,6 +59,7 @@ c_default_rpool_tweaks=(
   -O normalization=formD
   -O relatime=on
   -O xattr=sa
+  -O devices=off
 )
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
@@ -185,8 +187,8 @@ The procedure can be entirely automated via environment variables:
 - ZFS_DEBIAN_ROOT_PASSWORD
 - ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
-- ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (see defaults below)
-- ZFS_RPOOL_TWEAKS           : root pool options to set on creation (see defaults below)
+- ZFS_BPOOL_CREATE_OPTIONS   : boot pool options to set on creation (see defaults below)
+- ZFS_RPOOL_CREATE_OPTIONS   : root pool options to set on creation (see defaults below)
 - ZFS_POOLS_RAID_TYPE        : options: blank (striping), `mirror`, `raidz`, `raidz2`, `raidz3`; if unset, it will be asked.
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer); set 0 for no swap
@@ -200,9 +202,9 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 2. internet must be accessible while chrooting in `'$c_zfs_mount_dir'` (ie. `echo nameserver 8.8.8.8 >> '$c_zfs_mount_dir'/etc/resolv.conf`)
 3. `'$c_zfs_mount_dir'` must be left in a dismountable state (e.g. no file locks, no swap etc.);
 
-Boot pool default tweaks: '"${c_default_bpool_tweaks[@]/#-/$'\n'  -}"'
+Boot pool default create options: '"${c_default_bpool_create_options[*]/#-/$'\n'  -}"'
 
-Root pool default tweaks: '"${c_default_rpool_tweaks[*]/#-/$'\n'  -}"'
+Root pool default create options: '"${c_default_rpool_create_options[*]/#-/$'\n'  -}"'
 '
 
   echo "$help"
@@ -662,26 +664,26 @@ function ask_pool_names {
   print_variables v_bpool_name v_rpool_name
 }
 
-function ask_pool_tweaks {
+function ask_pool_create_options {
   print_step_info_header
 
-  local bpool_tweaks_message='Insert the tweaks for the boot pool
+  local bpool_create_options_message='Insert the create options for the boot pool
 
-The option `-O devices=off` is already set, and must not be specified.'
+The mount-related options are automatically added, and must not be specified.'
 
-  local raw_bpool_tweaks=${ZFS_BPOOL_TWEAKS:-$(whiptail --inputbox "$bpool_tweaks_message" 30 100 -- "${c_default_bpool_tweaks[*]}" 3>&1 1>&2 2>&3)}
+  local raw_bpool_create_options=${ZFS_BPOOL_CREATE_OPTIONS:-$(whiptail --inputbox "$bpool_create_options_message" 30 100 -- "${c_default_bpool_create_options[*]}" 3>&1 1>&2 2>&3)}
 
-  mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$raw_bpool_tweaks")
+  mapfile -d' ' -t v_bpool_create_options < <(echo -n "$raw_bpool_create_options")
 
-  local rpool_tweaks_message='Insert the tweaks for the root pool
+  local rpool_create_options_message='Insert the create options for the root pool
 
-The option `-O devices=off` is already set, and must not be specified.'
+The encryption/mount-related options are automatically added, and must not be specified.'
 
-  local raw_rpool_tweaks=${ZFS_RPOOL_TWEAKS:-$(whiptail --inputbox "$rpool_tweaks_message" 30 100 -- "${c_default_rpool_tweaks[*]}" 3>&1 1>&2 2>&3)}
+  local raw_rpool_create_options=${ZFS_RPOOL_CREATE_OPTIONS:-$(whiptail --inputbox "$rpool_create_options_message" 30 100 -- "${c_default_rpool_create_options[*]}" 3>&1 1>&2 2>&3)}
 
-  mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$raw_rpool_tweaks")
+  mapfile -d' ' -t v_rpool_create_options < <(echo -n "$raw_rpool_create_options")
 
-  print_variables v_bpool_tweaks v_rpool_tweaks
+  print_variables v_bpool_create_options v_rpool_create_options
 }
 
 function install_host_packages {
@@ -1027,15 +1029,15 @@ function create_pools {
   # shellcheck disable=SC2086 # TODO: convert v_pools_raid_type to array, and quote
   zpool create \
     "${encryption_options[@]}" \
-    "${v_rpool_tweaks[@]}" \
-    -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
+    "${v_rpool_create_options[@]}" \
+    -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
     "$v_rpool_name" $v_pools_raid_type "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
 
   # shellcheck disable=SC2086 # TODO: See above
   zpool create \
-    "${v_bpool_tweaks[@]}" \
-    -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
+    "${v_bpool_create_options[@]}" \
+    -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
     "$v_bpool_name" $v_pools_raid_type "${bpool_disks_partitions[@]}"
 }
 
@@ -1460,7 +1462,7 @@ ask_boot_partition_size
 ask_swap_size
 ask_free_tail_space
 ask_pool_names
-ask_pool_tweaks
+ask_pool_create_options
 
 distro_dependent_invoke "install_host_packages"
 setup_partitions

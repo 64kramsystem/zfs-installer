@@ -664,7 +664,7 @@ function install_host_packages {
       apt update
 
       # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
-      # Module compilation log: `/var/lib/dkms/zfs/0.8.2/build/make.log` (adjust according to version).
+      # Module compilation log: `/var/lib/dkms/zfs/**/*/make.log` (adjust according to version).
       #
       echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
       apt install --yes libelf-dev zfs-dkms

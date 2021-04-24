@@ -6,15 +6,19 @@ set -o nounset
 set -o errtrace
 shopt -s inherit_errexit
 
-if [[ ! -e /opt/shellcheck/shellcheck ]]; then
-  mkdir -p /opt/shellcheck
+# Always download the latest version:
+#
+# - it's fast and stable enough not to worry about it;
+# - the workflow is basically single-person, so there's no risk of a new dev encountering an error found
+#   by a new shellcheck version.
 
-  wget -qO- https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz \
-    | tar xJv -O shellcheck-stable/shellcheck \
-    > /opt/shellcheck/shellcheck
+mkdir -p /opt/shellcheck
 
-  chmod +x /opt/shellcheck/shellcheck
-fi
+wget -qO- https://github.com/koalaman/shellcheck/releases/download/stable/shellcheck-stable.linux.x86_64.tar.xz \
+  | tar xJv -O shellcheck-stable/shellcheck \
+  > /opt/shellcheck/shellcheck
+
+chmod +x /opt/shellcheck/shellcheck
 
 /opt/shellcheck/shellcheck --version
 

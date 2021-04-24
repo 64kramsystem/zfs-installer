@@ -12,11 +12,6 @@ set -o nounset
 
 # VARIABLES/CONSTANTS ##########################################################
 
-# Variables set by the script
-
-v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
-v_zfs_08_in_repository=      # 1=true, false otherwise (applies only to Ubuntu-based)
-
 # Variables set (indirectly) by the user
 #
 # The passphrase has a special workflow - it's sent to a named pipe (see create_passphrase_named_pipe()).
@@ -38,6 +33,8 @@ v_free_tail_space=           # integer
 
 # Variables set during execution
 
+v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
+v_zfs_08_in_repository=      # 1=true, false otherwise (applies only to Ubuntu-based)
 v_temp_volume_device=        # /dev/zdN; scope: setup_partitions -> sync_os_temp_installation_dir_to_rpool
 v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
 

@@ -1195,7 +1195,7 @@ function install_jail_zfs_packages_UbuntuServer {
   fi
 }
 
-function install_and_configure_bootloader {
+function prepare_efi_partition {
   print_step_info_header
 
   chroot_execute "echo PARTUUID=$(blkid -s PARTUUID -o value "${v_selected_disks[0]}-part1") /boot/efi vfat nofail,x-systemd.device-timeout=1 0 1 > /etc/fstab"
@@ -1204,6 +1204,10 @@ function install_and_configure_bootloader {
   chroot_execute "mount /boot/efi"
 
   chroot_execute "grub-install"
+}
+
+function configure_and_update_grub {
+  print_step_info_header
 
   chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /'    /etc/default/grub"
 
@@ -1230,15 +1234,8 @@ function install_and_configure_bootloader {
   chroot_execute "update-grub"
 }
 
-function install_and_configure_bootloader_Debian {
+function configure_and_update_grub_Debian {
   print_step_info_header
-
-  chroot_execute "echo PARTUUID=$(blkid -s PARTUUID -o value "${v_selected_disks[0]}-part1") /boot/efi vfat nofail,x-systemd.device-timeout=1 0 1 > /etc/fstab"
-
-  chroot_execute "mkdir -p /boot/efi"
-  chroot_execute "mount /boot/efi"
-
-  chroot_execute "grub-install"
 
   chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /' /etc/default/grub"
   chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)quiet/\$1/'             /etc/default/grub"
@@ -1485,7 +1482,8 @@ fi
 
 prepare_jail
 distro_dependent_invoke "install_jail_zfs_packages"
-distro_dependent_invoke "install_and_configure_bootloader"
+prepare_efi_partition
+distro_dependent_invoke "configure_and_update_grub"
 sync_efi_partitions
 configure_boot_pool_import
 update_initramfs

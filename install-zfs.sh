@@ -1002,8 +1002,8 @@ function create_pools {
 
   # POOLS CREATION #####################
 
-  # See https://github.com/zfsonlinux/zfs/wiki/Ubuntu-18.04-Root-on-ZFS for the details.
-  #
+  # The root pool must be created first, since the boot pool mountpoint is inside it.
+
   # `-R` creates an "Alternate Root Point", which is lost on unmount; it's just a convenience for a temporary mountpoint;
   # `-f` force overwrite partitions is existing - in some cases, even after wipefs, a filesystem is mistakenly recognized
   # `-O` set filesystem properties on a pool (pools and filesystems are distincted entities, however, a pool includes an FS by default).
@@ -1018,8 +1018,6 @@ function create_pools {
     "$v_rpool_name" $v_pools_raid_type "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
 
-  # `-d` disable all the pool features (not used here);
-  #
   # shellcheck disable=SC2086 # TODO: See above
   zpool create \
     "${v_bpool_tweaks[@]}" \

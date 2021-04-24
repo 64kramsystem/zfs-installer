@@ -721,7 +721,7 @@ function install_host_packages_elementary {
 
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     apt update
-    apt install -y software-properties-common
+    apt install --yes software-properties-common
   fi
 
   install_host_packages
@@ -752,7 +752,7 @@ function install_host_packages_UbuntuServer {
     # this will be a no-op.
     #
     apt update
-    apt install -y "linux-headers-$(uname -r)"
+    apt install --yes "linux-headers-$(uname -r)"
 
     install_host_packages
   else
@@ -1156,7 +1156,7 @@ APT'
 function install_jail_zfs_packages_elementary {
   print_step_info_header
 
-  chroot_execute "apt install -y software-properties-common"
+  chroot_execute "apt install --yes software-properties-common"
 
   install_jail_zfs_packages
 }

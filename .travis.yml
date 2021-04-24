@@ -1,8 +1,0 @@
----
-dist: bionic
-language: bash
-cache:
-  directories:
-  - "/opt/shellcheck"
-script:
-- ci/run_shellcheck

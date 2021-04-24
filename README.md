@@ -57,10 +57,11 @@ The advantages of this project over the Ubuntu installer are:
 1. it supports pools configuration;
 2. it allows specifying the RAID type;
 3. it allows customization of the disk partitions;
-4. it supports additional features (e.g. encryption and trimming);
-5. it supports many more operating systems;
-6. it supports unattended installations, via custom scripts;
-7. it's easy to extend.
+4. it supports new OpenZFS versions, via PPA `jonathonf/zfs`.
+6. it supports additional features (e.g. encryption and trimming);
+7. it supports many more operating systems;
+7. it supports unattended installations, via custom scripts;
+8. it's easy to extend.
 
 The disadvantages are:
 
@@ -110,6 +111,7 @@ This script needs to be run with admin permissions, from a Live CD.
 The procedure can be entirely automated via environment variables:
 
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
+- ZFS_USE_PPA                : set to 1 to use packages from `ppa:jonathonf/zfs` (automatically set to true if the O/S version doesn't ship at least v0.8)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
 - ZFS_PASSPHRASE
 - ZFS_RPOOL_NAME

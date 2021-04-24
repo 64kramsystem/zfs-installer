@@ -371,13 +371,10 @@ function find_zfs_package_requirements {
   local zfs_package_version
   zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print /^Version: (\d+\.\d+)/')
 
-  if [[ -n $zfs_package_version ]]; then
-    if [[ ! $zfs_package_version =~ ^0\. ]]; then
-      >&2 echo "Unsupported ZFS version!: $zfs_package_version"
-      exit 1
-    elif dpkg --compare-versions "$zfs_package_version" ge 0.8; then
-      v_zfs_08_in_repository=1
-    fi
+  # Test returns false if $zfs_package_version is blank.
+  #
+  if dpkg --compare-versions "$zfs_package_version" ge 0.8; then
+    v_zfs_08_in_repository=1
   fi
 }
 

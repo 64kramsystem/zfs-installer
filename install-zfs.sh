@@ -34,7 +34,7 @@ v_free_tail_space=           # integer
 # Variables set during execution
 
 v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
-v_zfs_08_in_repository=      # 1=true, false otherwise (applies only to Ubuntu-based)
+v_use_ppa=                   # 1=true, false otherwise (applies only to Ubuntu-based).
 v_temp_volume_device=        # /dev/zdN; scope: setup_partitions -> sync_os_temp_installation_dir_to_rpool
 v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
 
@@ -363,7 +363,7 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
 # Fortunately, with Debian-specific logic isolated, we need conditionals based only on #2 - see
 # install_host_packages() and install_host_packages_UbuntuServer().
 #
-function find_zfs_package_requirements {
+function set_zfs_ppa_requirement {
   print_step_info_header
 
   apt update
@@ -371,14 +371,14 @@ function find_zfs_package_requirements {
   local zfs_package_version
   zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print /^Version: (\d+\.\d+)/')
 
-  # Test returns false if $zfs_package_version is blank.
+  # Test returns true if $zfs_package_version is blank.
   #
-  if dpkg --compare-versions "$zfs_package_version" ge 0.8; then
-    v_zfs_08_in_repository=1
+  if dpkg --compare-versions "$zfs_package_version" lt 0.8; then
+    v_use_ppa=1
   fi
 }
 
-function find_zfs_package_requirements_Debian {
+function set_zfs_ppa_requirement_Debian {
   # Only update apt; in this case, ZFS packages are handled in a specific way.
 
   apt update
@@ -387,12 +387,12 @@ function find_zfs_package_requirements_Debian {
 # Mint 20 has the CDROM repository enabled, but apt fails when updating due to it (or possibly due
 # to it being incorrectly setup).
 #
-function find_zfs_package_requirements_Linuxmint {
+function set_zfs_ppa_requirement_Linuxmint {
   print_step_info_header
 
   perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
 
-  find_zfs_package_requirements
+  set_zfs_ppa_requirement
 }
 
 # By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
@@ -657,7 +657,7 @@ The option `-O devices=off` is already set, and must not be specified.'
 function install_host_packages {
   print_step_info_header
 
-  if [[ $v_zfs_08_in_repository != "1" ]]; then
+  if [[ $v_use_ppa == "1" ]]; then
     if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
       add-apt-repository --yes ppa:jonathonf/zfs
       apt update
@@ -724,7 +724,7 @@ function install_host_packages_elementary {
 function install_host_packages_UbuntuServer {
   print_step_info_header
 
-  if [[ $v_zfs_08_in_repository == "1" ]]; then
+  if [[ $v_use_ppa != "1" ]]; then
     apt install --yes zfsutils-linux efibootmgr
 
     zfs --version > "$c_zfs_module_version_log" 2>&1
@@ -1103,7 +1103,7 @@ function prepare_jail {
 function install_jail_zfs_packages {
   print_step_info_header
 
-  if [[ $v_zfs_08_in_repository != "1" ]]; then
+  if [[ $v_use_ppa == "1" ]]; then
     chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
 
     chroot_execute "apt update"
@@ -1158,7 +1158,7 @@ function install_jail_zfs_packages_elementary {
 function install_jail_zfs_packages_UbuntuServer {
   print_step_info_header
 
-  if [[ $v_zfs_08_in_repository == "1" ]]; then
+  if [[ $v_use_ppa != "1" ]]; then
     chroot_execute "apt install --yes zfsutils-linux zfs-initramfs grub-efi-amd64-signed shim-signed"
   else
     install_jail_zfs_packages
@@ -1421,7 +1421,7 @@ store_running_processes
 check_prerequisites
 display_intro_banner
 find_suitable_disks
-distro_dependent_invoke "find_zfs_package_requirements"
+distro_dependent_invoke "set_zfs_ppa_requirement"
 create_passphrase_named_pipe
 
 select_disks

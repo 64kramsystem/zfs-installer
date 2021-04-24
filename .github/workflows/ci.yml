@@ -1,0 +1,11 @@
+name: CI
+
+on: pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Run shellcheck
+      run: ci/run_shellcheck.sh

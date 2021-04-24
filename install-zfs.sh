@@ -1264,7 +1264,7 @@ function prepare_efi_partition {
   # It's important to give a long enough timeout time; on relatively slow machines (e.g. virtual machines),
   # a timeout of 1 will fail.
   #
-  chroot_execute "echo PARTUUID=$(blkid -s PARTUUID -o value "${v_selected_disks[0]}-part1") /boot/efi vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 1 > /etc/fstab"
+  chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[0]}"-part1) /boot/efi vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 1 > /etc/fstab"
 
   chroot_execute "mkdir -p /boot/efi"
   chroot_execute "mount /boot/efi"
@@ -1306,7 +1306,7 @@ function sync_efi_partitions {
 
     # Reference: prepare_efi_partition()
     #
-    chroot_execute "echo PARTUUID=$(blkid -s PARTUUID -o value "${v_selected_disks[i]}-part1") $synced_efi_partition_path vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 1 >> /etc/fstab"
+    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $synced_efi_partition_path vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 1 >> /etc/fstab"
 
     chroot_execute "mkdir -p $synced_efi_partition_path"
     chroot_execute "mount $synced_efi_partition_path"

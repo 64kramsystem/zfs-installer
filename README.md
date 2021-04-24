@@ -99,7 +99,7 @@ The installer itself can run over SSH (\[S\]Ubiquity of course needs to be still
 
 The program supports unattended installation, via environment variables. The program built-in help explains all the options:
 
-```sh
+```
 $ wget -qO- https://git.io/JelI5 | bash /dev/stdin --help
 Usage: install-zfs.sh [-h|--help]
 

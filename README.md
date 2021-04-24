@@ -97,7 +97,6 @@ The procedure can be entirely automated via environment variables:
 
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
-- ZFS_ENCRYPT_RPOOL          : set 1 to encrypt the pool
 - ZFS_PASSPHRASE
 - ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME

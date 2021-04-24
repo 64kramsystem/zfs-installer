@@ -21,7 +21,6 @@ set -o nounset
 # Note that `ZFS_PASSPHRASE` and `ZFS_POOLS_RAID_TYPE` consider the unset state (see help).
 
 v_boot_partition_size=       # Integer number with `M` or `G` suffix
-v_bpool_name=
 v_bpool_create_options=      # array; see defaults below for format
 v_root_password=             # Debian-only
 v_rpool_name=
@@ -43,6 +42,7 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 # Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
 # specific to it.
 
+c_bpool_name=bpool
 c_ppa=ppa:jonathonf/zfs
 c_efi_system_partition_size=512 # megabytes
 c_default_boot_partition_size=2048 # megabytes
@@ -204,7 +204,6 @@ The procedure can be entirely automated via environment variables:
 - ZFS_BOOT_PARTITION_SIZE    : integer number with `M` or `G` suffix (defaults to `'${c_default_boot_partition_size}M'`)
 - ZFS_PASSPHRASE             : set non-blank to encrypt the pool, and blank not to. if unset, it will be asked.
 - ZFS_DEBIAN_ROOT_PASSWORD
-- ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
 - ZFS_BPOOL_CREATE_OPTIONS   : boot pool options to set on creation (see defaults below)
 - ZFS_RPOOL_CREATE_OPTIONS   : root pool options to set on creation (see defaults below)
@@ -653,20 +652,8 @@ For detailed informations, see the wiki page: https://github.com/saveriomiroddi/
   print_variables v_free_tail_space
 }
 
-function ask_pool_names {
+function ask_rpool_name {
   print_step_info_header
-
-  if [[ ${ZFS_BPOOL_NAME:-} != "" ]]; then
-    v_bpool_name=$ZFS_BPOOL_NAME
-  else
-    local bpool_name_invalid_message=
-
-    while [[ ! $v_bpool_name =~ ^[a-z][a-zA-Z_:.-]+$ ]]; do
-      v_bpool_name=$(whiptail --inputbox "${bpool_name_invalid_message}Insert the name for the boot pool" 30 100 bpool 3>&1 1>&2 2>&3)
-
-      bpool_name_invalid_message="Invalid pool name! "
-    done
-  fi
 
   if [[ ${ZFS_RPOOL_NAME:-} != "" ]]; then
     v_rpool_name=$ZFS_RPOOL_NAME
@@ -680,7 +667,7 @@ function ask_pool_names {
     done
   fi
 
-  print_variables v_bpool_name v_rpool_name
+  print_variables v_rpool_name
 }
 
 function ask_pool_create_options {
@@ -1057,7 +1044,7 @@ function create_pools {
   zpool create \
     "${v_bpool_create_options[@]}" \
     -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
-    "$v_bpool_name" $v_pools_raid_type "${bpool_disks_partitions[@]}"
+    "$c_bpool_name" $v_pools_raid_type "${bpool_disks_partitions[@]}"
 }
 
 function create_swap_volume {
@@ -1125,7 +1112,7 @@ function remove_temp_partition_and_expand_rpool {
     # For unencrypted pools, `-l` doesn't interfere.
     #
     zpool import -l -R "$c_zfs_mount_dir" "$v_rpool_name" < "$c_passphrase_named_pipe_2"
-    zpool import -l -R "$c_zfs_mount_dir" "$v_bpool_name"
+    zpool import -l -R "$c_zfs_mount_dir" "$c_bpool_name"
 
     for selected_disk in "${v_selected_disks[@]}"; do
       zpool online -e "$v_rpool_name" "$selected_disk-part3"
@@ -1293,7 +1280,7 @@ function sync_efi_partitions {
 function configure_boot_pool_import {
   print_step_info_header
 
-  chroot_execute "cat > /etc/systemd/system/zfs-import-$v_bpool_name.service <<UNIT
+  chroot_execute "cat > /etc/systemd/system/zfs-import-$c_bpool_name.service <<UNIT
 [Unit]
 DefaultDependencies=no
 Before=zfs-import-scan.service
@@ -1303,17 +1290,17 @@ Before=zfs-import-cache.service
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/bin/sh -c '[ -f /etc/zfs/zpool.cache ] && mv /etc/zfs/zpool.cache /etc/zfs/preboot_zpool.cache || true'
-ExecStart=/sbin/zpool import -N -o cachefile=none $v_bpool_name
+ExecStart=/sbin/zpool import -N -o cachefile=none $c_bpool_name
 ExecStartPost=/bin/sh -c '[ -f /etc/zfs/preboot_zpool.cache ] && mv /etc/zfs/preboot_zpool.cache /etc/zfs/zpool.cache || true'
 
 [Install]
 WantedBy=zfs-import.target
 UNIT"
 
-  chroot_execute "systemctl enable zfs-import-$v_bpool_name.service"
+  chroot_execute "systemctl enable zfs-import-$c_bpool_name.service"
 
-  chroot_execute "zfs set mountpoint=legacy $v_bpool_name"
-  chroot_execute "echo $v_bpool_name /boot zfs nodev,relatime,x-systemd.requires=zfs-import-$v_bpool_name.service 0 0 >> /etc/fstab"
+  chroot_execute "zfs set mountpoint=legacy $c_bpool_name"
+  chroot_execute "echo $c_bpool_name /boot zfs nodev,relatime,x-systemd.requires=zfs-import-$c_bpool_name.service 0 0 >> /etc/fstab"
 }
 
 # This step is important in cases where the keyboard layout is not the standard one.
@@ -1385,7 +1372,7 @@ ConditionVirtualization=!container
 
 [Service]
 Type=oneshot
-ExecStart=/sbin/zpool trim $v_bpool_name
+ExecStart=/sbin/zpool trim $c_bpool_name
 ExecStart=/sbin/zpool trim $v_rpool_name
 UNIT"
 
@@ -1483,7 +1470,7 @@ ask_encryption
 ask_boot_partition_size
 ask_swap_size
 ask_free_tail_space
-ask_pool_names
+ask_rpool_name
 ask_pool_create_options
 
 distro_dependent_invoke "install_host_packages"

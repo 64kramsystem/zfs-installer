@@ -43,6 +43,7 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 # Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
 # specific to it.
 
+c_ppa=ppa:jonathonf/zfs
 c_efi_system_partition_size=512 # megabytes
 c_default_boot_partition_size=2048 # megabytes
 c_default_bpool_tweaks="-o ashift=12"
@@ -166,7 +167,7 @@ This script needs to be run with admin permissions, from a Live CD.
 The procedure can be entirely automated via environment variables:
 
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
-- ZFS_USE_PPA                : set to 1 to use packages from `ppa:jonathonf/zfs` (automatically set to true if the O/S version doesn'\''t ship at least v0.8)
+- ZFS_USE_PPA                : set to 1 to use packages from `'"$c_ppa"'` (automatically set to true if the O/S version doesn'\''t ship at least v0.8)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
 - ZFS_BOOT_PARTITION_SIZE    : integer number with `M` or `G` suffix (defaults to `'${c_default_boot_partition_size}M'`)
 - ZFS_PASSPHRASE             : set non-blank to encrypt the pool, and blank not to. if unset, it will be asked.
@@ -660,7 +661,7 @@ function install_host_packages {
 
   if [[ $v_use_ppa == "1" ]]; then
     if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
-      add-apt-repository --yes ppa:jonathonf/zfs
+      add-apt-repository --yes "$c_ppa"
       apt update
 
       # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
@@ -1105,7 +1106,7 @@ function install_jail_zfs_packages {
   print_step_info_header
 
   if [[ $v_use_ppa == "1" ]]; then
-    chroot_execute "add-apt-repository --yes ppa:jonathonf/zfs"
+    chroot_execute "add-apt-repository --yes $c_ppa"
 
     chroot_execute "apt update"
 

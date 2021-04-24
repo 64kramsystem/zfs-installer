@@ -375,7 +375,7 @@ function find_zfs_package_requirements {
     if [[ ! $zfs_package_version =~ ^0\. ]]; then
       >&2 echo "Unsupported ZFS version!: $zfs_package_version"
       exit 1
-    elif (( $(echo "$zfs_package_version" | cut -d. -f2) >= 8 )); then
+    elif dpkg --compare-versions "$zfs_package_version" ge 0.8; then
       v_zfs_08_in_repository=1
     fi
   fi

@@ -47,8 +47,18 @@ c_ppa=ppa:jonathonf/zfs
 c_efi_system_partition_size=512 # megabytes
 c_default_boot_partition_size=2048 # megabytes
 c_memory_warning_limit=2880 # megabytes; not set to 3072 because on some systems, some RAM is occupied/shared
-c_default_bpool_tweaks="-o ashift=12"
-c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
+c_default_bpool_tweaks=(
+  -o ashift=12
+)
+c_default_rpool_tweaks=(
+  -o ashift=12
+  -O acltype=posixacl
+  -O compression=lz4
+  -O dnodesize=auto
+  -O normalization=formD
+  -O relatime=on
+  -O xattr=sa
+)
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
@@ -175,8 +185,8 @@ The procedure can be entirely automated via environment variables:
 - ZFS_DEBIAN_ROOT_PASSWORD
 - ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
-- ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `'$c_default_bpool_tweaks'`)
-- ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `'$c_default_rpool_tweaks'`)
+- ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (see defaults below)
+- ZFS_RPOOL_TWEAKS           : root pool options to set on creation (see defaults below)
 - ZFS_POOLS_RAID_TYPE        : options: blank (striping), `mirror`, `raidz`, `raidz2`, `raidz3`; if unset, it will be asked.
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer); set 0 for no swap
@@ -189,6 +199,10 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 1. the virtual filesystems must be mounted in `'$c_zfs_mount_dir'` (ie. `for vfs in proc sys dev; do mount --rbind /$vfs '$c_zfs_mount_dir'/$vfs; done`)
 2. internet must be accessible while chrooting in `'$c_zfs_mount_dir'` (ie. `echo nameserver 8.8.8.8 >> '$c_zfs_mount_dir'/etc/resolv.conf`)
 3. `'$c_zfs_mount_dir'` must be left in a dismountable state (e.g. no file locks, no swap etc.);
+
+Boot pool default tweaks: '"${c_default_bpool_tweaks[@]/#-/$'\n'  -}"'
+
+Root pool default tweaks: '"${c_default_rpool_tweaks[*]/#-/$'\n'  -}"'
 '
 
   echo "$help"
@@ -655,7 +669,7 @@ function ask_pool_tweaks {
 
 The option `-O devices=off` is already set, and must not be specified.'
 
-  local raw_bpool_tweaks=${ZFS_BPOOL_TWEAKS:-$(whiptail --inputbox "$bpool_tweaks_message" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)}
+  local raw_bpool_tweaks=${ZFS_BPOOL_TWEAKS:-$(whiptail --inputbox "$bpool_tweaks_message" 30 100 -- "${c_default_bpool_tweaks[*]}" 3>&1 1>&2 2>&3)}
 
   mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$raw_bpool_tweaks")
 
@@ -663,7 +677,7 @@ The option `-O devices=off` is already set, and must not be specified.'
 
 The option `-O devices=off` is already set, and must not be specified.'
 
-  local raw_rpool_tweaks=${ZFS_RPOOL_TWEAKS:-$(whiptail --inputbox "$rpool_tweaks_message" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)}
+  local raw_rpool_tweaks=${ZFS_RPOOL_TWEAKS:-$(whiptail --inputbox "$rpool_tweaks_message" 30 100 -- "${c_default_rpool_tweaks[*]}" 3>&1 1>&2 2>&3)}
 
   mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$raw_rpool_tweaks")
 

@@ -46,6 +46,7 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 c_ppa=ppa:jonathonf/zfs
 c_efi_system_partition_size=512 # megabytes
 c_default_boot_partition_size=2048 # megabytes
+c_memory_warning_limit=2880 # megabytes; not set to 3072 because on some systems, some RAM is occupied/shared
 c_default_bpool_tweaks="-o ashift=12"
 c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
 c_zfs_mount_dir=/mnt
@@ -377,6 +378,19 @@ function set_zfs_ppa_requirement {
   #
   if [[ ${ZFS_USE_PPA:-} == "1" ]] || dpkg --compare-versions "$zfs_package_version" lt 0.8; then
     v_use_ppa=1
+
+    local system_memory
+    system_memory=$(free -m | perl -lane 'print @F[1] if $. == 2')
+
+    if [[ $system_memory -lt $c_memory_warning_limit && -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
+      local dialog_message='WARNING! The PPA is used, which requires compiling the ZFS module.
+
+On systems with relatively little RAM (less than around 3 GiB), the procedure may crash during the compilation.
+
+In case of crash due to low memory, no error message is displayed; the only traces are `Killed process` messages in the syslog.'
+
+      whiptail --msgbox "$dialog_message" 30 100
+    fi
   fi
 }
 

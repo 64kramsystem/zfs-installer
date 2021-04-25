@@ -471,10 +471,15 @@ function select_disks {
         local disk_selection_status=OFF
       fi
 
+      # St00pid simple way of sorting by block device name. Relies on the tokens not including whitespace.
+
       for disk_id in "${v_suitable_disks[@]}"; do
         block_device_basename="$(basename "$(readlink -f "$disk_id")")"
-        menu_entries_option+=("$disk_id" "($block_device_basename)" "$disk_selection_status")
+        menu_entries_option+=("$disk_id ($block_device_basename) $disk_selection_status")
       done
+
+      # shellcheck disable=2207 # cheating here, for simplicity (alternative: add tr and mapfile).
+      menu_entries_option=($(printf $'%s\n' "${menu_entries_option[@]}" | sort -k 2))
 
       local dialog_message="Select the ZFS devices.
 

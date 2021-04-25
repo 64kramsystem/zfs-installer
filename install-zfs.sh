@@ -453,10 +453,14 @@ function set_zfs_ppa_requirement_Linuxmint {
 # from the logs.
 #
 function create_passphrase_named_pipe {
+  print_step_info_header
+
   mkfifo "$c_passphrase_named_pipe"
 }
 
 function register_exit_hook {
+  print_step_info_header
+
   function _exit_hook {
     rm -f "$c_passphrase_named_pipe"
 
@@ -1095,6 +1099,8 @@ function create_pools {
 }
 
 function create_swap_volume {
+  print_step_info_header
+
   if [[ $v_swap_size -gt 0 ]]; then
     zfs create \
       -V "${v_swap_size}G" -b "$(getconf PAGESIZE)" \
@@ -1106,6 +1112,8 @@ function create_swap_volume {
 }
 
 function copy_zpool_cache {
+  print_step_info_header
+
   mkdir -p "$c_zfs_mount_dir/etc/zfs"
   cp /etc/zfs/zpool.cache "$c_zfs_mount_dir/etc/zfs/"
 }

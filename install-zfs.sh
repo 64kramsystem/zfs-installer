@@ -464,7 +464,8 @@ export ZFS_FREE_TAIL_SPACE=$v_free_tail_space"
 
     # Convenient ready exports (selecting the first two disks):
     #
-    local ready="
+    # shellcheck disable=SC2155,SC2012
+    local _="
 export ZFS_USE_PPA=
 export ZFS_SELECTED_DISKS=$(ls -l /dev/disk/by-id/ | perl -ane 'print "/dev/disk/by-id/@F[8]," if ! /\d$/ && ($c += 1) <= 2' | head -c -1)
 export ZFS_BOOT_PARTITION_SIZE=2048M

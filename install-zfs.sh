@@ -22,6 +22,7 @@ set -o nounset
 
 v_boot_partition_size=       # Integer number with `M` or `G` suffix
 v_bpool_create_options=      # array; see defaults below for format
+v_passphrase=
 v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_create_options=      # array; see defaults below for format
@@ -85,7 +86,6 @@ c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
-c_passphrase_named_pipe_2=$(dirname "$(mktemp)")/zfs-installer.pp.2.fifo
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
@@ -453,12 +453,12 @@ function set_zfs_ppa_requirement_Linuxmint {
 # from the logs.
 #
 function create_passphrase_named_pipe {
-  mkfifo "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
+  mkfifo "$c_passphrase_named_pipe"
 }
 
 function register_exit_hook {
   function _exit_hook {
-    rm -f "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
+    rm -f "$c_passphrase_named_pipe"
 
     # Only the meaningful variable(s) are printed.
     # In order to print the password, the store strategy should be changed, as the pipes may be empty.
@@ -592,25 +592,23 @@ function ask_root_password_Debian {
 function ask_encryption {
   print_step_info_header
 
-  local passphrase=
-
   set +x
 
   if [[ -v ZFS_PASSPHRASE ]]; then
-    passphrase=$ZFS_PASSPHRASE
+    v_passphrase=$ZFS_PASSPHRASE
   else
     local passphrase_repeat=_
     local passphrase_invalid_message=
 
-    while [[ $passphrase != "$passphrase_repeat" || ${#passphrase} -lt 8 ]]; do
+    while [[ $v_passphrase != "$passphrase_repeat" || ${#v_passphrase} -lt 8 ]]; do
       local dialog_message="${passphrase_invalid_message}Please enter the passphrase (8 chars min.):
 
 Leave blank to keep encryption disabled.
 "
 
-      passphrase=$(whiptail --passwordbox "$dialog_message" 30 100 3>&1 1>&2 2>&3)
+      v_passphrase=$(whiptail --passwordbox "$dialog_message" 30 100 3>&1 1>&2 2>&3)
 
-      if [[ -z $passphrase ]]; then
+      if [[ -z $v_passphrase ]]; then
         break
       fi
 
@@ -619,9 +617,6 @@ Leave blank to keep encryption disabled.
       passphrase_invalid_message="Passphrase too short, or not matching! "
     done
   fi
-
-  echo -n "$passphrase" > "$c_passphrase_named_pipe" &
-  echo -n "$passphrase" > "$c_passphrase_named_pipe_2" &
 
   set -x
 }
@@ -1036,23 +1031,14 @@ function custom_install_operating_system {
 function create_pools {
   # POOL OPTIONS #######################
 
-  local passphrase
   local encryption_options=()
   local rpool_disks_partitions=()
   local bpool_disks_partitions=()
 
   set +x
-
-  passphrase=$(cat "$c_passphrase_named_pipe")
-
-  if [[ -n $passphrase ]]; then
+  if [[ -n $v_passphrase ]]; then
     encryption_options=(-O "encryption=on" -O "keylocation=prompt" -O "keyformat=passphrase")
   fi
-
-  # Push back for unlogged reuse. Minor inconvenience, but worth :-)
-  #
-  echo -n "$passphrase" > "$c_passphrase_named_pipe" &
-
   set -x
 
   for selected_disk in "${v_selected_disks[@]}"; do
@@ -1063,6 +1049,10 @@ function create_pools {
   # POOLS CREATION #####################
 
   # The root pool must be created first, since the boot pool mountpoint is inside it.
+
+  set +x
+  echo -n "$v_passphrase" > "$c_passphrase_named_pipe" &
+  set -x
 
   # `-R` creates an "Alternate Root Point", which is lost on unmount; it's just a convenience for a temporary mountpoint;
   # `-f` force overwrite partitions is existing - in some cases, even after wipefs, a filesystem is mistakenly recognized
@@ -1151,9 +1141,13 @@ function remove_temp_partition_and_expand_rpool {
       parted -s "$selected_disk" unit s resizepart 3 -- "$resize_reference"
     done
 
+    set +x
+    echo -n "$v_passphrase" > "$c_passphrase_named_pipe" &
+    set -x
+
     # For unencrypted pools, `-l` doesn't interfere.
     #
-    zpool import -l -R "$c_zfs_mount_dir" "$v_rpool_name" < "$c_passphrase_named_pipe_2"
+    zpool import -l -R "$c_zfs_mount_dir" "$v_rpool_name" < "$c_passphrase_named_pipe"
     zpool import -l -R "$c_zfs_mount_dir" "$c_bpool_name"
 
     for selected_disk in "${v_selected_disks[@]}"; do

@@ -25,7 +25,7 @@ v_bpool_create_options=      # array; see defaults below for format
 v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_create_options=      # array; see defaults below for format
-v_pools_raid_type=
+v_pools_raid_type=()
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
@@ -485,8 +485,10 @@ Devices with mounted partitions, cdroms, and removable devices are not displayed
 function select_pools_raid_type {
   print_step_info_header
 
+  local raw_pools_raid_type=
+
   if [[ -v ZFS_POOLS_RAID_TYPE ]]; then
-    v_pools_raid_type=$ZFS_POOLS_RAID_TYPE
+    raw_pools_raid_type=$ZFS_POOLS_RAID_TYPE
   elif [[ ${#v_selected_disks[@]} -ge 2 ]]; then
     # Entries preparation.
 
@@ -517,7 +519,11 @@ function select_pools_raid_type {
     fi
 
     local dialog_message="Select the pools RAID type."
-    v_pools_raid_type=$(whiptail --radiolist "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
+    raw_pools_raid_type=$(whiptail --radiolist "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
+  fi
+
+  if [[ -n $raw_pools_raid_type ]]; then
+    v_pools_raid_type=("$raw_pools_raid_type")
   fi
 }
 
@@ -1022,19 +1028,17 @@ function create_pools {
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
-  # shellcheck disable=SC2086 # TODO: convert v_pools_raid_type to array, and quote
   zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_create_options[@]}" \
     -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
-    "$v_rpool_name" $v_pools_raid_type "${rpool_disks_partitions[@]}" \
+    "$v_rpool_name" "${v_pools_raid_type[@]}" "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
 
-  # shellcheck disable=SC2086 # TODO: See above
   zpool create \
     "${v_bpool_create_options[@]}" \
     -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
-    "$c_bpool_name" $v_pools_raid_type "${bpool_disks_partitions[@]}"
+    "$c_bpool_name" "${v_pools_raid_type[@]}" "${bpool_disks_partitions[@]}"
 }
 
 function create_swap_volume {

@@ -22,6 +22,7 @@ set -o nounset
 
 v_boot_partition_size=       # Integer number with `M` or `G` suffix
 v_bpool_create_options=      # array; see defaults below for format
+v_passphrase=
 v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_create_options=      # array; see defaults below for format
@@ -85,7 +86,6 @@ c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
-c_passphrase_named_pipe_2=$(dirname "$(mktemp)")/zfs-installer.pp.2.fifo
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
@@ -452,35 +452,57 @@ function set_zfs_ppa_requirement_Linuxmint {
 # By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
 # from the logs.
 #
-# The FIFO file is left in the filesystem after the script exits. It's not worth taking care of
-# removing it, since the environment is entirely ephemeral.
-#
 function create_passphrase_named_pipe {
-  rm -f "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
-  mkfifo "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
+  print_step_info_header
+
+  mkfifo "$c_passphrase_named_pipe"
 }
 
 function register_exit_hook {
+  print_step_info_header
+
   function _exit_hook {
+    rm -f "$c_passphrase_named_pipe"
+
+    set +x
+
     # Only the meaningful variable(s) are printed.
     # In order to print the password, the store strategy should be changed, as the pipes may be empty.
     #
-    echo "\
-# Currently set exports, for performing an unattended (as possible) installation with the same configuration:
-#
+    echo "
+Currently set exports, for performing an unattended (as possible) installation with the same configuration:
+
 export ZFS_USE_PPA=$v_use_ppa
 export ZFS_SELECTED_DISKS=$(IFS=,; echo -n "${v_selected_disks[*]}")
 export ZFS_BOOT_PARTITION_SIZE=$v_boot_partition_size
-export ZFS_PASSPHRASE=_currently_not_available_
+export ZFS_PASSPHRASE=$(printf %q "$v_passphrase")
 export ZFS_DEBIAN_ROOT_PASSWORD=$(printf %q "$v_root_password")
 export ZFS_RPOOL_NAME=$v_rpool_name
 export ZFS_BPOOL_CREATE_OPTIONS=\"${v_bpool_create_options[*]}\"
-export ZFS_RPOOL_CREATE_OPTIONS=\"${v_bpool_create_options[*]}\"
+export ZFS_RPOOL_CREATE_OPTIONS=\"${v_rpool_create_options[*]}\"
 export ZFS_POOLS_RAID_TYPE=${v_pools_raid_type[*]}
-export ZFS_NO_INFO_MESSAGES=${ZFS_NO_INFO_MESSAGES:-}
+export ZFS_NO_INFO_MESSAGES=1
 export ZFS_SWAP_SIZE=$v_swap_size
-export ZFS_FREE_TAIL_SPACE=$v_free_tail_space
-"
+export ZFS_FREE_TAIL_SPACE=$v_free_tail_space"
+
+    # Convenient ready exports (selecting the first two disks):
+    #
+    local ready="
+export ZFS_USE_PPA=
+export ZFS_SELECTED_DISKS=$(ls -l /dev/disk/by-id/ | perl -ane 'print "/dev/disk/by-id/@F[8]," if ! /\d$/ && ($c += 1) <= 2' | head -c -1)
+export ZFS_BOOT_PARTITION_SIZE=2048M
+export ZFS_PASSPHRASE=aaaaaaaa
+export ZFS_DEBIAN_ROOT_PASSWORD=a
+export ZFS_RPOOL_NAME=rpool
+export ZFS_BPOOL_CREATE_OPTIONS='-o ashift=12 -o autotrim=on -d -o feature@async_destroy=enabled -o feature@bookmarks=enabled -o feature@embedded_data=enabled -o feature@empty_bpobj=enabled -o feature@enabled_txg=enabled -o feature@extensible_dataset=enabled -o feature@filesystem_limits=enabled -o feature@hole_birth=enabled -o feature@large_blocks=enabled -o feature@lz4_compress=enabled -o feature@spacemap_histogram=enabled -O acltype=posixacl -O compression=lz4 -O devices=off -O normalization=formD -O relatime=on -O xattr=sa'
+export ZFS_RPOOL_CREATE_OPTIONS='-o ashift=12 -o autotrim=on -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O normalization=formD -O relatime=on -O xattr=sa -O devices=off'
+export ZFS_POOLS_RAID_TYPE=
+export ZFS_NO_INFO_MESSAGES=1
+export ZFS_SWAP_SIZE=2
+export ZFS_FREE_TAIL_SPACE=12
+    "
+
+    set -x
   }
   trap _exit_hook EXIT
 }
@@ -594,25 +616,23 @@ function ask_root_password_Debian {
 function ask_encryption {
   print_step_info_header
 
-  local passphrase=
-
   set +x
 
   if [[ -v ZFS_PASSPHRASE ]]; then
-    passphrase=$ZFS_PASSPHRASE
+    v_passphrase=$ZFS_PASSPHRASE
   else
     local passphrase_repeat=_
     local passphrase_invalid_message=
 
-    while [[ $passphrase != "$passphrase_repeat" || ${#passphrase} -lt 8 ]]; do
+    while [[ $v_passphrase != "$passphrase_repeat" || ${#v_passphrase} -lt 8 ]]; do
       local dialog_message="${passphrase_invalid_message}Please enter the passphrase (8 chars min.):
 
 Leave blank to keep encryption disabled.
 "
 
-      passphrase=$(whiptail --passwordbox "$dialog_message" 30 100 3>&1 1>&2 2>&3)
+      v_passphrase=$(whiptail --passwordbox "$dialog_message" 30 100 3>&1 1>&2 2>&3)
 
-      if [[ -z $passphrase ]]; then
+      if [[ -z $v_passphrase ]]; then
         break
       fi
 
@@ -621,9 +641,6 @@ Leave blank to keep encryption disabled.
       passphrase_invalid_message="Passphrase too short, or not matching! "
     done
   fi
-
-  echo -n "$passphrase" > "$c_passphrase_named_pipe" &
-  echo -n "$passphrase" > "$c_passphrase_named_pipe_2" &
 
   set -x
 }
@@ -1038,23 +1055,14 @@ function custom_install_operating_system {
 function create_pools {
   # POOL OPTIONS #######################
 
-  local passphrase
   local encryption_options=()
   local rpool_disks_partitions=()
   local bpool_disks_partitions=()
 
   set +x
-
-  passphrase=$(cat "$c_passphrase_named_pipe")
-
-  if [[ -n $passphrase ]]; then
+  if [[ -n $v_passphrase ]]; then
     encryption_options=(-O "encryption=on" -O "keylocation=prompt" -O "keyformat=passphrase")
   fi
-
-  # Push back for unlogged reuse. Minor inconvenience, but worth :-)
-  #
-  echo -n "$passphrase" > "$c_passphrase_named_pipe" &
-
   set -x
 
   for selected_disk in "${v_selected_disks[@]}"; do
@@ -1065,6 +1073,10 @@ function create_pools {
   # POOLS CREATION #####################
 
   # The root pool must be created first, since the boot pool mountpoint is inside it.
+
+  set +x
+  echo -n "$v_passphrase" > "$c_passphrase_named_pipe" &
+  set -x
 
   # `-R` creates an "Alternate Root Point", which is lost on unmount; it's just a convenience for a temporary mountpoint;
   # `-f` force overwrite partitions is existing - in some cases, even after wipefs, a filesystem is mistakenly recognized
@@ -1087,6 +1099,8 @@ function create_pools {
 }
 
 function create_swap_volume {
+  print_step_info_header
+
   if [[ $v_swap_size -gt 0 ]]; then
     zfs create \
       -V "${v_swap_size}G" -b "$(getconf PAGESIZE)" \
@@ -1098,6 +1112,8 @@ function create_swap_volume {
 }
 
 function copy_zpool_cache {
+  print_step_info_header
+
   mkdir -p "$c_zfs_mount_dir/etc/zfs"
   cp /etc/zfs/zpool.cache "$c_zfs_mount_dir/etc/zfs/"
 }
@@ -1153,9 +1169,13 @@ function remove_temp_partition_and_expand_rpool {
       parted -s "$selected_disk" unit s resizepart 3 -- "$resize_reference"
     done
 
+    set +x
+    echo -n "$v_passphrase" > "$c_passphrase_named_pipe" &
+    set -x
+
     # For unencrypted pools, `-l` doesn't interfere.
     #
-    zpool import -l -R "$c_zfs_mount_dir" "$v_rpool_name" < "$c_passphrase_named_pipe_2"
+    zpool import -l -R "$c_zfs_mount_dir" "$v_rpool_name" < "$c_passphrase_named_pipe"
     zpool import -l -R "$c_zfs_mount_dir" "$c_bpool_name"
 
     for selected_disk in "${v_selected_disks[@]}"; do
@@ -1484,8 +1504,8 @@ display_intro_banner
 check_system_memory
 find_suitable_disks
 distro_dependent_invoke "set_zfs_ppa_requirement"
-create_passphrase_named_pipe
 register_exit_hook
+create_passphrase_named_pipe
 
 select_disks
 select_pools_raid_type

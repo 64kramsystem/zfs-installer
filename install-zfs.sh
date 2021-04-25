@@ -25,7 +25,7 @@ v_bpool_create_options=      # array; see defaults below for format
 v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_create_options=      # array; see defaults below for format
-v_pools_raid_type=
+v_pools_raid_type=()
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
@@ -460,6 +460,31 @@ function create_passphrase_named_pipe {
   mkfifo "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
 }
 
+function register_exit_hook {
+  function _exit_hook {
+    # Only the meaningful variable(s) are printed.
+    # In order to print the password, the store strategy should be changed, as the pipes may be empty.
+    #
+    echo "\
+# Currently set exports, for performing an unattended (as possible) installation with the same configuration:
+#
+export ZFS_USE_PPA=$v_use_ppa
+export ZFS_SELECTED_DISKS=$(IFS=,; echo -n "${v_selected_disks[*]}")
+export ZFS_BOOT_PARTITION_SIZE=$v_boot_partition_size
+export ZFS_PASSPHRASE=_currently_not_available_
+export ZFS_DEBIAN_ROOT_PASSWORD=$(printf %q "$v_root_password")
+export ZFS_RPOOL_NAME=$v_rpool_name
+export ZFS_BPOOL_CREATE_OPTIONS=\"${v_bpool_create_options[*]}\"
+export ZFS_RPOOL_CREATE_OPTIONS=\"${v_bpool_create_options[*]}\"
+export ZFS_POOLS_RAID_TYPE=${v_pools_raid_type[*]}
+export ZFS_NO_INFO_MESSAGES=${ZFS_NO_INFO_MESSAGES:-}
+export ZFS_SWAP_SIZE=$v_swap_size
+export ZFS_FREE_TAIL_SPACE=$v_free_tail_space
+"
+  }
+  trap _exit_hook EXIT
+}
+
 function select_disks {
   print_step_info_header
 
@@ -504,8 +529,10 @@ Devices with mounted partitions, cdroms, and removable devices are not displayed
 function select_pools_raid_type {
   print_step_info_header
 
+  local raw_pools_raid_type=
+
   if [[ -v ZFS_POOLS_RAID_TYPE ]]; then
-    v_pools_raid_type=$ZFS_POOLS_RAID_TYPE
+    raw_pools_raid_type=$ZFS_POOLS_RAID_TYPE
   elif [[ ${#v_selected_disks[@]} -ge 2 ]]; then
     # Entries preparation.
 
@@ -536,7 +563,11 @@ function select_pools_raid_type {
     fi
 
     local dialog_message="Select the pools RAID type."
-    v_pools_raid_type=$(whiptail --radiolist "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
+    raw_pools_raid_type=$(whiptail --radiolist "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
+  fi
+
+  if [[ -n $raw_pools_raid_type ]]; then
+    v_pools_raid_type=("$raw_pools_raid_type")
   fi
 }
 
@@ -1041,20 +1072,18 @@ function create_pools {
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
   #
-  # shellcheck disable=SC2086 # TODO: convert v_pools_raid_type to array, and quote
   zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_create_options[@]}" \
     -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
-    "$v_rpool_name" $v_pools_raid_type "${rpool_disks_partitions[@]}" \
+    "$v_rpool_name" "${v_pools_raid_type[@]}" "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
 
-  # shellcheck disable=SC2086 # TODO: See above
   zpool create \
     -o cachefile=/etc/zfs/zpool.cache \
     "${v_bpool_create_options[@]}" \
     -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
-    "$c_bpool_name" $v_pools_raid_type "${bpool_disks_partitions[@]}"
+    "$c_bpool_name" "${v_pools_raid_type[@]}" "${bpool_disks_partitions[@]}"
 }
 
 function create_swap_volume {
@@ -1244,9 +1273,9 @@ function configure_and_update_grub {
   #
   chroot_execute "perl -i -pe 's/(GRUB_TIMEOUT_STYLE=hidden)/#\$1/'                        /etc/default/grub"
   chroot_execute "perl -i -pe 's/^(GRUB_HIDDEN_.*)/#\$1/'                                  /etc/default/grub"
-  chroot_execute "perl -i -pe 's/(GRUB_TIMEOUT=)0/\${1}5/'                                 /etc/default/grub"
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)quiet/\$1/'                /etc/default/grub"
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)splash/\$1/'               /etc/default/grub"
+  chroot_execute "perl -i -pe 's/GRUB_TIMEOUT=\K0/5/'                                      /etc/default/grub"
+  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=.*\Kquiet//'                   /etc/default/grub"
+  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=.*\Ksplash//'                  /etc/default/grub"
   chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                            /etc/default/grub"
   chroot_execute 'echo "GRUB_RECORDFAIL_TIMEOUT=5"                                      >> /etc/default/grub'
 
@@ -1262,7 +1291,7 @@ function configure_and_update_grub_Debian {
 
   chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'     /etc/default/grub"
 
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)quiet/\$1/'             /etc/default/grub"
+  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=.*\Kquiet//'                /etc/default/grub"
   chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                         /etc/default/grub"
 
   chroot_execute "update-grub"
@@ -1456,6 +1485,7 @@ check_system_memory
 find_suitable_disks
 distro_dependent_invoke "set_zfs_ppa_requirement"
 create_passphrase_named_pipe
+register_exit_hook
 
 select_disks
 select_pools_raid_type

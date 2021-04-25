@@ -452,16 +452,14 @@ function set_zfs_ppa_requirement_Linuxmint {
 # By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
 # from the logs.
 #
-# The FIFO file is left in the filesystem after the script exits. It's not worth taking care of
-# removing it, since the environment is entirely ephemeral.
-#
 function create_passphrase_named_pipe {
-  rm -f "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
   mkfifo "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
 }
 
 function register_exit_hook {
   function _exit_hook {
+    rm -f "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
+
     # Only the meaningful variable(s) are printed.
     # In order to print the password, the store strategy should be changed, as the pipes may be empty.
     #
@@ -1484,8 +1482,8 @@ display_intro_banner
 check_system_memory
 find_suitable_disks
 distro_dependent_invoke "set_zfs_ppa_requirement"
-create_passphrase_named_pipe
 register_exit_hook
+create_passphrase_named_pipe
 
 select_disks
 select_pools_raid_type

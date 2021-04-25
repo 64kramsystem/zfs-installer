@@ -46,7 +46,7 @@ c_bpool_name=bpool
 c_ppa=ppa:jonathonf/zfs
 c_efi_system_partition_size=512 # megabytes
 c_default_boot_partition_size=2048 # megabytes
-c_memory_warning_limit=2880 # megabytes; not set to 3072 because on some systems, some RAM is occupied/shared
+c_memory_warning_limit=$((3584 - 128)) # megabytes; exclude some RAM, which can be occupied/shared
 c_default_bpool_create_options=(
   -o ashift=12
   -o autotrim=on
@@ -322,6 +322,24 @@ In order to stop the procedure, hit Esc twice during dialogs (excluding yes/no o
   fi
 }
 
+function check_system_memory {
+    local system_memory
+    system_memory=$(free -m | perl -lane 'print @F[1] if $. == 2')
+
+    if [[ $system_memory -lt $c_memory_warning_limit && -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
+      # A workaround for these cases is to use the swap generate, but this can potentially cause troubles
+      # (severe compilation slowdowns) if a user tries to compensate too little memory with a large swapfile.
+      #
+      local dialog_message='WARNING! In some cases, the ZFS modules require compilation.
+
+On systems with relatively little RAM, the procedure may crash during the compilation, for example with 3 GB on Debian 10.9.
+
+In such cases, the module building may fail abruptly, either without visible errors (leaving "process killed" messages in the syslog), or with package installation errors (leaving odd errors in the module'\''s `make.log`).'
+
+      whiptail --msgbox "$dialog_message" 30 100
+    fi
+}
+
 function find_suitable_disks {
   print_step_info_header
 
@@ -411,19 +429,6 @@ function set_zfs_ppa_requirement {
   #
   if [[ ${ZFS_USE_PPA:-} == "1" ]] || dpkg --compare-versions "$zfs_package_version" lt 0.8; then
     v_use_ppa=1
-
-    local system_memory
-    system_memory=$(free -m | perl -lane 'print @F[1] if $. == 2')
-
-    if [[ $system_memory -lt $c_memory_warning_limit && -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
-      local dialog_message='WARNING! The PPA is used, which requires compiling the ZFS module.
-
-On systems with relatively little RAM (less than around 3 GiB), the procedure may crash during the compilation.
-
-In case of crash due to low memory, no error message is displayed; the only traces are `Killed process` messages in the syslog.'
-
-      whiptail --msgbox "$dialog_message" 30 100
-    fi
   fi
 }
 
@@ -1447,6 +1452,7 @@ distro_dependent_invoke "store_os_distro_information"
 store_running_processes
 check_prerequisites
 display_intro_banner
+check_system_memory
 find_suitable_disks
 distro_dependent_invoke "set_zfs_ppa_requirement"
 create_passphrase_named_pipe

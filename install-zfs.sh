@@ -441,6 +441,31 @@ function create_passphrase_named_pipe {
   mkfifo "$c_passphrase_named_pipe" "$c_passphrase_named_pipe_2"
 }
 
+function register_exit_hook {
+  function _exit_hook {
+    # Only the meaningful variable(s) are printed.
+    # In order to print the password, the store strategy should be changed, as the pipes may be empty.
+    #
+    echo "\
+# Currently set exports, for performing an unattended (as possible) installation with the same configuration:
+#
+export ZFS_USE_PPA=$v_use_ppa
+export ZFS_SELECTED_DISKS=$(IFS=,; echo -n "${v_selected_disks[*]}")
+export ZFS_BOOT_PARTITION_SIZE=$v_boot_partition_size
+export ZFS_PASSPHRASE=_currently_not_available_
+export ZFS_DEBIAN_ROOT_PASSWORD=$(printf %q "$v_root_password")
+export ZFS_RPOOL_NAME=$v_rpool_name
+export ZFS_BPOOL_CREATE_OPTIONS=\"${v_bpool_create_options[*]}\"
+export ZFS_RPOOL_CREATE_OPTIONS=\"${v_bpool_create_options[*]}\"
+export ZFS_POOLS_RAID_TYPE=${v_pools_raid_type[*]}
+export ZFS_NO_INFO_MESSAGES=${ZFS_NO_INFO_MESSAGES:-}
+export ZFS_SWAP_SIZE=$v_swap_size
+export ZFS_FREE_TAIL_SPACE=$v_free_tail_space
+"
+  }
+  trap _exit_hook EXIT
+}
+
 function select_disks {
   print_step_info_header
 
@@ -1455,6 +1480,7 @@ check_system_memory
 find_suitable_disks
 distro_dependent_invoke "set_zfs_ppa_requirement"
 create_passphrase_named_pipe
+register_exit_hook
 
 select_disks
 select_pools_raid_type

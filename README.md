@@ -40,13 +40,14 @@ As of 20.04, Canonical makes available an experimental ZFS installer on Ubuntu D
 The advantages of this project over the Ubuntu installer are:
 
 1. it supports pools configuration;
-2. it allows specifying the RAID type;
-3. it allows customization of the disk partitions;
-4. it supports additional features (e.g. encryption);
-5. it supports many more operating systems;
-6. it supports unattended installations, via custom scripts;
-7. it installs a convenient trimming job for ZFS pools;
-8. it's easy to extend.
+1. it allows specifying the RAID type;
+1. it allows customization of the disk partitions;
+1. it supports additional features (e.g. encryption);
+1. it supports new OpenZFS versions, via PPA `jonathonf/zfs`.
+1. it supports many more operating systems;
+1. it supports unattended installations, via custom scripts;
+1. it installs a convenient trimming job for ZFS pools;
+1. it's easy to extend.
 
 The disadvantages are:
 
@@ -85,7 +86,7 @@ The installer itself can run over SSH (\[S\]Ubiquity of course needs to be still
 
 The program supports unattended installation, via environment variables. The program built-in help explains all the options:
 
-```sh
+```
 $ wget -qO- https://git.io/JelI5 | bash /dev/stdin --help
 Usage: install-zfs.sh [-h|--help]
 
@@ -96,10 +97,9 @@ This script needs to be run with admin permissions, from a Live CD.
 The procedure can be entirely automated via environment variables:
 
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
+- ZFS_USE_PPAS               : set to 1 to use packages from `ppa:jonathonf/zfs` (automatically set to true if the O/S version doesn't ship at least v0.8)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
-- ZFS_ENCRYPT_RPOOL          : set 1 to encrypt the pool
 - ZFS_PASSPHRASE
-- ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
 - ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `-o ashift=12`)
 - ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD`)

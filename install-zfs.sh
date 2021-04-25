@@ -1352,7 +1352,10 @@ function fix_filesystem_mount_ordering {
 
   chroot_execute "mkdir /etc/zfs/zfs-list.cache"
   chroot_execute "touch /etc/zfs/zfs-list.cache/$c_bpool_name /etc/zfs/zfs-list.cache/$v_rpool_name"
-  chroot_execute "ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
+
+  # On Debian, this file may exist already.
+  #
+  chroot_execute "[[ ! -f /etc/zfs/zed.d/history_event-zfs-list-cacher.sh ]] && ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
 
   # Assumed to be present by the zedlet above on Debian, but missing.
   # Filed issue: https://github.com/zfsonlinux/zfs/issues/9945.

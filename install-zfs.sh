@@ -1248,9 +1248,9 @@ function configure_and_update_grub {
   #
   chroot_execute "perl -i -pe 's/(GRUB_TIMEOUT_STYLE=hidden)/#\$1/'                        /etc/default/grub"
   chroot_execute "perl -i -pe 's/^(GRUB_HIDDEN_.*)/#\$1/'                                  /etc/default/grub"
-  chroot_execute "perl -i -pe 's/(GRUB_TIMEOUT=)0/\${1}5/'                                 /etc/default/grub"
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)quiet/\$1/'                /etc/default/grub"
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)splash/\$1/'               /etc/default/grub"
+  chroot_execute "perl -i -pe 's/GRUB_TIMEOUT=\K0/5/'                                      /etc/default/grub"
+  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=.*\Kquiet//'                   /etc/default/grub"
+  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=.*\Ksplash//'                  /etc/default/grub"
   chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                            /etc/default/grub"
   chroot_execute 'echo "GRUB_RECORDFAIL_TIMEOUT=5"                                      >> /etc/default/grub'
 
@@ -1266,7 +1266,7 @@ function configure_and_update_grub_Debian {
 
   chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'     /etc/default/grub"
 
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)quiet/\$1/'             /etc/default/grub"
+  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=.*\Kquiet//'                /etc/default/grub"
   chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                         /etc/default/grub"
 
   chroot_execute "update-grub"

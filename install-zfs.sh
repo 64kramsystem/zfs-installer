@@ -21,11 +21,10 @@ set -o nounset
 # Note that `ZFS_PASSPHRASE` and `ZFS_POOLS_RAID_TYPE` consider the unset state (see help).
 
 v_boot_partition_size=       # Integer number with `M` or `G` suffix
-v_bpool_name=
-v_bpool_tweaks=              # array; see defaults below for format
+v_bpool_create_options=      # array; see defaults below for format
 v_root_password=             # Debian-only
 v_rpool_name=
-v_rpool_tweaks=              # array; see defaults below for format
+v_rpool_create_options=      # array; see defaults below for format
 v_pools_raid_type=
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
@@ -43,12 +42,44 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 # Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
 # specific to it.
 
+c_bpool_name=bpool
 c_ppa=ppa:jonathonf/zfs
 c_efi_system_partition_size=512 # megabytes
 c_default_boot_partition_size=2048 # megabytes
 c_memory_warning_limit=2880 # megabytes; not set to 3072 because on some systems, some RAM is occupied/shared
-c_default_bpool_tweaks="-o ashift=12"
-c_default_rpool_tweaks="-o ashift=12 -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O relatime=on -O xattr=sa -O normalization=formD"
+c_default_bpool_create_options=(
+  -o ashift=12
+  -o autotrim=on
+  -d
+  -o feature@async_destroy=enabled
+  -o feature@bookmarks=enabled
+  -o feature@embedded_data=enabled
+  -o feature@empty_bpobj=enabled
+  -o feature@enabled_txg=enabled
+  -o feature@extensible_dataset=enabled
+  -o feature@filesystem_limits=enabled
+  -o feature@hole_birth=enabled
+  -o feature@large_blocks=enabled
+  -o feature@lz4_compress=enabled
+  -o feature@spacemap_histogram=enabled
+  -O acltype=posixacl
+  -O compression=lz4
+  -O devices=off
+  -O normalization=formD
+  -O relatime=on
+  -O xattr=sa
+)
+c_default_rpool_create_options=(
+  -o ashift=12
+  -o autotrim=on
+  -O acltype=posixacl
+  -O compression=lz4
+  -O dnodesize=auto
+  -O normalization=formD
+  -O relatime=on
+  -O xattr=sa
+  -O devices=off
+)
 c_zfs_mount_dir=/mnt
 c_installed_os_data_mount_dir=/target
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
@@ -173,10 +204,9 @@ The procedure can be entirely automated via environment variables:
 - ZFS_BOOT_PARTITION_SIZE    : integer number with `M` or `G` suffix (defaults to `'${c_default_boot_partition_size}M'`)
 - ZFS_PASSPHRASE             : set non-blank to encrypt the pool, and blank not to. if unset, it will be asked.
 - ZFS_DEBIAN_ROOT_PASSWORD
-- ZFS_BPOOL_NAME
 - ZFS_RPOOL_NAME
-- ZFS_BPOOL_TWEAKS           : boot pool options to set on creation (defaults to `'$c_default_bpool_tweaks'`)
-- ZFS_RPOOL_TWEAKS           : root pool options to set on creation (defaults to `'$c_default_rpool_tweaks'`)
+- ZFS_BPOOL_CREATE_OPTIONS   : boot pool options to set on creation (see defaults below)
+- ZFS_RPOOL_CREATE_OPTIONS   : root pool options to set on creation (see defaults below)
 - ZFS_POOLS_RAID_TYPE        : options: blank (striping), `mirror`, `raidz`, `raidz2`, `raidz3`; if unset, it will be asked.
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer); set 0 for no swap
@@ -189,6 +219,10 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 1. the virtual filesystems must be mounted in `'$c_zfs_mount_dir'` (ie. `for vfs in proc sys dev; do mount --rbind /$vfs '$c_zfs_mount_dir'/$vfs; done`)
 2. internet must be accessible while chrooting in `'$c_zfs_mount_dir'` (ie. `echo nameserver 8.8.8.8 >> '$c_zfs_mount_dir'/etc/resolv.conf`)
 3. `'$c_zfs_mount_dir'` must be left in a dismountable state (e.g. no file locks, no swap etc.);
+
+Boot pool default create options: '"${c_default_bpool_create_options[*]/#-/$'\n'  -}"'
+
+Root pool default create options: '"${c_default_rpool_create_options[*]/#-/$'\n'  -}"'
 '
 
   echo "$help"
@@ -618,20 +652,8 @@ For detailed informations, see the wiki page: https://github.com/saveriomiroddi/
   print_variables v_free_tail_space
 }
 
-function ask_pool_names {
+function ask_rpool_name {
   print_step_info_header
-
-  if [[ ${ZFS_BPOOL_NAME:-} != "" ]]; then
-    v_bpool_name=$ZFS_BPOOL_NAME
-  else
-    local bpool_name_invalid_message=
-
-    while [[ ! $v_bpool_name =~ ^[a-z][a-zA-Z_:.-]+$ ]]; do
-      v_bpool_name=$(whiptail --inputbox "${bpool_name_invalid_message}Insert the name for the boot pool" 30 100 bpool 3>&1 1>&2 2>&3)
-
-      bpool_name_invalid_message="Invalid pool name! "
-    done
-  fi
 
   if [[ ${ZFS_RPOOL_NAME:-} != "" ]]; then
     v_rpool_name=$ZFS_RPOOL_NAME
@@ -645,29 +667,29 @@ function ask_pool_names {
     done
   fi
 
-  print_variables v_bpool_name v_rpool_name
+  print_variables v_rpool_name
 }
 
-function ask_pool_tweaks {
+function ask_pool_create_options {
   print_step_info_header
 
-  local bpool_tweaks_message='Insert the tweaks for the boot pool
+  local bpool_create_options_message='Insert the create options for the boot pool
 
-The option `-O devices=off` is already set, and must not be specified.'
+The mount-related options are automatically added, and must not be specified.'
 
-  local raw_bpool_tweaks=${ZFS_BPOOL_TWEAKS:-$(whiptail --inputbox "$bpool_tweaks_message" 30 100 -- "$c_default_bpool_tweaks" 3>&1 1>&2 2>&3)}
+  local raw_bpool_create_options=${ZFS_BPOOL_CREATE_OPTIONS:-$(whiptail --inputbox "$bpool_create_options_message" 30 100 -- "${c_default_bpool_create_options[*]}" 3>&1 1>&2 2>&3)}
 
-  mapfile -d' ' -t v_bpool_tweaks < <(echo -n "$raw_bpool_tweaks")
+  mapfile -d' ' -t v_bpool_create_options < <(echo -n "$raw_bpool_create_options")
 
-  local rpool_tweaks_message='Insert the tweaks for the root pool
+  local rpool_create_options_message='Insert the create options for the root pool
 
-The option `-O devices=off` is already set, and must not be specified.'
+The encryption/mount-related options are automatically added, and must not be specified.'
 
-  local raw_rpool_tweaks=${ZFS_RPOOL_TWEAKS:-$(whiptail --inputbox "$rpool_tweaks_message" 30 100 -- "$c_default_rpool_tweaks" 3>&1 1>&2 2>&3)}
+  local raw_rpool_create_options=${ZFS_RPOOL_CREATE_OPTIONS:-$(whiptail --inputbox "$rpool_create_options_message" 30 100 -- "${c_default_rpool_create_options[*]}" 3>&1 1>&2 2>&3)}
 
-  mapfile -d' ' -t v_rpool_tweaks < <(echo -n "$raw_rpool_tweaks")
+  mapfile -d' ' -t v_rpool_create_options < <(echo -n "$raw_rpool_create_options")
 
-  print_variables v_bpool_tweaks v_rpool_tweaks
+  print_variables v_bpool_create_options v_rpool_create_options
 }
 
 function install_host_packages {
@@ -1002,8 +1024,8 @@ function create_pools {
 
   # POOLS CREATION #####################
 
-  # See https://github.com/zfsonlinux/zfs/wiki/Ubuntu-18.04-Root-on-ZFS for the details.
-  #
+  # The root pool must be created first, since the boot pool mountpoint is inside it.
+
   # `-R` creates an "Alternate Root Point", which is lost on unmount; it's just a convenience for a temporary mountpoint;
   # `-f` force overwrite partitions is existing - in some cases, even after wipefs, a filesystem is mistakenly recognized
   # `-O` set filesystem properties on a pool (pools and filesystems are distincted entities, however, a pool includes an FS by default).
@@ -1013,18 +1035,17 @@ function create_pools {
   # shellcheck disable=SC2086 # TODO: convert v_pools_raid_type to array, and quote
   zpool create \
     "${encryption_options[@]}" \
-    "${v_rpool_tweaks[@]}" \
-    -O devices=off -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
+    "${v_rpool_create_options[@]}" \
+    -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
     "$v_rpool_name" $v_pools_raid_type "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
 
-  # `-d` disable all the pool features (not used here);
-  #
   # shellcheck disable=SC2086 # TODO: See above
   zpool create \
-    "${v_bpool_tweaks[@]}" \
-    -O devices=off -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
-    "$v_bpool_name" $v_pools_raid_type "${bpool_disks_partitions[@]}"
+    -o cachefile=/etc/zfs/zpool.cache \
+    "${v_bpool_create_options[@]}" \
+    -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
+    "$c_bpool_name" $v_pools_raid_type "${bpool_disks_partitions[@]}"
 }
 
 function create_swap_volume {
@@ -1036,6 +1057,11 @@ function create_swap_volume {
 
     mkswap -f "/dev/zvol/$v_rpool_name/swap"
   fi
+}
+
+function copy_zpool_cache {
+  mkdir -p "$c_zfs_mount_dir/etc/zfs"
+  cp /etc/zfs/zpool.cache "$c_zfs_mount_dir/etc/zfs/"
 }
 
 function sync_os_temp_installation_dir_to_rpool {
@@ -1092,7 +1118,7 @@ function remove_temp_partition_and_expand_rpool {
     # For unencrypted pools, `-l` doesn't interfere.
     #
     zpool import -l -R "$c_zfs_mount_dir" "$v_rpool_name" < "$c_passphrase_named_pipe_2"
-    zpool import -l -R "$c_zfs_mount_dir" "$v_bpool_name"
+    zpool import -l -R "$c_zfs_mount_dir" "$c_bpool_name"
 
     for selected_disk in "${v_selected_disks[@]}"; do
       zpool online -e "$v_rpool_name" "$selected_disk-part3"
@@ -1181,17 +1207,23 @@ function install_jail_zfs_packages_UbuntuServer {
   fi
 }
 
-function install_and_configure_bootloader {
+function prepare_efi_partition {
   print_step_info_header
 
-  chroot_execute "echo PARTUUID=$(blkid -s PARTUUID -o value "${v_selected_disks[0]}-part1") /boot/efi vfat nofail,x-systemd.device-timeout=1 0 1 > /etc/fstab"
+  # The other mounts are configured/synced in the EFI partitions sync stage.
+  #
+  chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[0]}"-part1) /boot/efi vfat defaults 0 0 > /etc/fstab"
 
   chroot_execute "mkdir -p /boot/efi"
   chroot_execute "mount /boot/efi"
 
   chroot_execute "grub-install"
+}
 
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /'    /etc/default/grub"
+function configure_and_update_grub {
+  print_step_info_header
+
+  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'        /etc/default/grub"
 
   # Silence warning during the grub probe (source: https://git.io/JenXF).
   #
@@ -1216,17 +1248,11 @@ function install_and_configure_bootloader {
   chroot_execute "update-grub"
 }
 
-function install_and_configure_bootloader_Debian {
+function configure_and_update_grub_Debian {
   print_step_info_header
 
-  chroot_execute "echo PARTUUID=$(blkid -s PARTUUID -o value "${v_selected_disks[0]}-part1") /boot/efi vfat nofail,x-systemd.device-timeout=1 0 1 > /etc/fstab"
+  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'     /etc/default/grub"
 
-  chroot_execute "mkdir -p /boot/efi"
-  chroot_execute "mount /boot/efi"
-
-  chroot_execute "grub-install"
-
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /' /etc/default/grub"
   chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX_DEFAULT=.*)quiet/\$1/'             /etc/default/grub"
   chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                         /etc/default/grub"
 
@@ -1239,7 +1265,7 @@ function sync_efi_partitions {
   for ((i = 1; i < ${#v_selected_disks[@]}; i++)); do
     local synced_efi_partition_path="/boot/efi$((i + 1))"
 
-    chroot_execute "echo PARTUUID=$(blkid -s PARTUUID -o value "${v_selected_disks[i]}-part1") $synced_efi_partition_path vfat nofail,x-systemd.device-timeout=1 0 1 >> /etc/fstab"
+    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[0]}"-part1) $synced_efi_partition_path vfat defaults 0 0 >> /etc/fstab"
 
     chroot_execute "mkdir -p $synced_efi_partition_path"
     chroot_execute "mount $synced_efi_partition_path"
@@ -1254,32 +1280,6 @@ function sync_efi_partitions {
   chroot_execute "umount /boot/efi"
 }
 
-function configure_boot_pool_import {
-  print_step_info_header
-
-  chroot_execute "cat > /etc/systemd/system/zfs-import-$v_bpool_name.service <<UNIT
-[Unit]
-DefaultDependencies=no
-Before=zfs-import-scan.service
-Before=zfs-import-cache.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStartPre=/bin/sh -c '[ -f /etc/zfs/zpool.cache ] && mv /etc/zfs/zpool.cache /etc/zfs/preboot_zpool.cache || true'
-ExecStart=/sbin/zpool import -N -o cachefile=none $v_bpool_name
-ExecStartPost=/bin/sh -c '[ -f /etc/zfs/preboot_zpool.cache ] && mv /etc/zfs/preboot_zpool.cache /etc/zfs/zpool.cache || true'
-
-[Install]
-WantedBy=zfs-import.target
-UNIT"
-
-  chroot_execute "systemctl enable zfs-import-$v_bpool_name.service"
-
-  chroot_execute "zfs set mountpoint=legacy $v_bpool_name"
-  chroot_execute "echo $v_bpool_name /boot zfs nodev,relatime,x-systemd.requires=zfs-import-$v_bpool_name.service 0 0 >> /etc/fstab"
-}
-
 # This step is important in cases where the keyboard layout is not the standard one.
 # See issue https://github.com/saveriomiroddi/zfs-installer/issues/110.
 #
@@ -1289,47 +1289,54 @@ function update_initramfs {
   chroot_execute "update-initramfs -u"
 }
 
-function update_zed_cache_Debian {
+function fix_filesystem_mount_ordering {
+  print_step_info_header
+
   chroot_execute "mkdir /etc/zfs/zfs-list.cache"
-  chroot_execute "touch /etc/zfs/zfs-list.cache/$v_rpool_name"
+  chroot_execute "touch /etc/zfs/zfs-list.cache/$c_bpool_name /etc/zfs/zfs-list.cache/$v_rpool_name"
   chroot_execute "ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
 
-  # Assumed to be present by the zedlet above, but missing.
+  # Assumed to be present by the zedlet above on Debian, but missing.
   # Filed issue: https://github.com/zfsonlinux/zfs/issues/9945.
   #
   chroot_execute "mkdir /run/lock"
 
+  # It's not clear (based on the help) why it's explicitly run in foreground (`-F`), but backgrounded.
+  #
   chroot_execute "zed -F &"
 
   # We could pool the events via `zpool events -v`, but it's much simpler to just check on the file.
   #
   local success=
 
-  if [[ ! -s "$c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name" ]]; then
-    # Takes around half second on a test VM.
+  if [[ ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$c_bpool_name || ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
+    # For the rpool only, it takes around half second on a test VM.
     #
-    chroot_execute "zfs set canmount=noauto $v_rpool_name"
+    chroot_execute "zfs set canmount=on $c_bpool_name"
+    chroot_execute "zfs set canmount=on $v_rpool_name"
 
     SECONDS=0
 
     while [[ $SECONDS -lt 5 ]]; do
-      if [[ -s "$c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name" ]]; then
+      if [[ ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$c_bpool_name || ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
         success=1
         break
       else
         sleep 0.25
       fi
     done
+  else
+    success=1
   fi
+
+  chroot_execute "pkill zed"
 
   if [[ $success -ne 1 ]]; then
     echo "Error: The ZFS cache hasn't been updated by ZED!"
     exit 1
   fi
 
-  chroot_execute "pkill zed"
-
-  chroot_execute "sed -Ei 's|$c_installed_os_data_mount_dir/?|/|' /etc/zfs/zfs-list.cache/$v_rpool_name"
+  chroot_execute "sed -Ei 's|$c_zfs_mount_dir/?|/|' /etc/zfs/zfs-list.cache/*"
 }
 
 # We don't care about synchronizing with the `fstrim` service for two reasons:
@@ -1349,7 +1356,7 @@ ConditionVirtualization=!container
 
 [Service]
 Type=oneshot
-ExecStart=/sbin/zpool trim $v_bpool_name
+ExecStart=/sbin/zpool trim $c_bpool_name
 ExecStart=/sbin/zpool trim $v_rpool_name
 UNIT"
 
@@ -1447,8 +1454,8 @@ ask_encryption
 ask_boot_partition_size
 ask_swap_size
 ask_free_tail_space
-ask_pool_names
-ask_pool_tweaks
+ask_rpool_name
+ask_pool_create_options
 
 distro_dependent_invoke "install_host_packages"
 setup_partitions
@@ -1459,11 +1466,13 @@ if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
 
   create_pools
   create_swap_volume
+  copy_zpool_cache
   sync_os_temp_installation_dir_to_rpool
   remove_temp_partition_and_expand_rpool
 else
   create_pools
   create_swap_volume
+  copy_zpool_cache
   remove_temp_partition_and_expand_rpool
 
   custom_install_operating_system
@@ -1471,11 +1480,11 @@ fi
 
 prepare_jail
 distro_dependent_invoke "install_jail_zfs_packages"
-distro_dependent_invoke "install_and_configure_bootloader"
+prepare_efi_partition
+distro_dependent_invoke "configure_and_update_grub"
 sync_efi_partitions
-configure_boot_pool_import
 update_initramfs
-distro_dependent_invoke "update_zed_cache" --noforce
+fix_filesystem_mount_ordering
 configure_pools_trimming
 configure_remaining_settings
 

@@ -340,6 +340,25 @@ In such cases, the module building may fail abruptly, either without visible err
     fi
 }
 
+function save_disks_log {
+  print_step_info_header
+
+  # shellcheck disable=SC2012 # `ls` may clean the output, but in this case, it doesn't matter
+  ls -l /dev/disk/by-id | tail -n +2 | perl -lane 'print "@F[8..10]"' > "$c_disks_log"
+
+  all_disk_ids=$(find /dev/disk/by-id -mindepth 1 -regextype awk -not -regex '.+-part[0-9]+$' | sort)
+
+  while read -r disk_id || [[ -n $disk_id ]]; do
+    cat >> "$c_disks_log" << LOG
+
+## DEVICE: $disk_id ################################
+
+$(udevadm info --query=property "$(readlink -f "$disk_id")")
+
+LOG
+  done < <(echo -n "$all_disk_ids")
+}
+
 function find_suitable_disks {
   print_step_info_header
 
@@ -347,9 +366,6 @@ function find_suitable_disks {
   # starting a VirtualBox VM that is a full clone of a suspended VM with snapshots.
   #
   udevadm trigger
-
-  # shellcheck disable=SC2012 # `ls` may clean the output, but in this case, it doesn't matter
-  ls -l /dev/disk/by-id | tail -n +2 | perl -lane 'print "@F[8..10]"' > "$c_disks_log"
 
   local candidate_disk_ids
   local mounted_devices
@@ -380,14 +396,6 @@ function find_suitable_disks {
         v_suitable_disks+=("$disk_id")
       fi
     fi
-
-    cat >> "$c_disks_log" << LOG
-
-## DEVICE: $disk_id ################################
-
-$(udevadm info --query=property "$(readlink -f "$disk_id")")
-
-LOG
   done < <(echo -n "$candidate_disk_ids")
 
   if [[ ${#v_suitable_disks[@]} -eq 0 ]]; then
@@ -1495,6 +1503,7 @@ store_running_processes
 check_prerequisites
 display_intro_banner
 check_system_memory
+save_disks_log
 find_suitable_disks
 distro_dependent_invoke "set_zfs_ppa_requirement"
 register_exit_hook

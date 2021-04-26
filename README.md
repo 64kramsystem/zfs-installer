@@ -2,7 +2,7 @@
 
 # zfs-installer
 
-ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
+ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Ubuntu-based operating systems using their standard installer (or debootstrap, or any custom script).
 
 - [Requirements and functionality](#requirements-and-functionality)
 - [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
@@ -22,7 +22,6 @@ The program currently supports:
 - Ubuntu Desktop 18.04.x/20.04 Live
 - Ubuntu Server 18.04.x/20.04 Live
 - Linux Mint 19.x, 20
-- Debian 10.x Live (desktop environment required)
 - ElementaryOS 5.1
 
 The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
@@ -31,7 +30,7 @@ EFI boot is required (any modern (2011+) system will do); legacy boot is current
 
 All the ZFS RAID types are supported, with any arbitrary number of disks. An EFI partition is created on each disk, for redundancy purposes.
 
-It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
+It's fairly easy to extend the program to support other Ubuntu-based operating systems - the project is open to feature requests.
 
 ## Comparison with Ubuntu built-in installer
 

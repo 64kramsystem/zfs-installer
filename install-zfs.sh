@@ -1304,18 +1304,6 @@ function configure_and_update_grub {
   chroot_execute "update-grub"
 }
 
-function configure_and_update_grub_Debian {
-  print_step_info_header
-
-  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'     /etc/default/grub"
-
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /' /etc/default/grub"
-  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=.*\Kquiet//'                /etc/default/grub"
-  chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                         /etc/default/grub"
-
-  chroot_execute "update-grub"
-}
-
 function sync_efi_partitions {
   print_step_info_header
 
@@ -1522,7 +1510,7 @@ fi
 prepare_jail
 distro_dependent_invoke "install_jail_zfs_packages"
 prepare_efi_partition
-distro_dependent_invoke "configure_and_update_grub"
+configure_and_update_grub
 sync_efi_partitions
 configure_boot_pool_import
 update_initramfs

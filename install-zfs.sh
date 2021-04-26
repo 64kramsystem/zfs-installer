@@ -1039,7 +1039,7 @@ function create_pools {
 
   set +x
   if [[ -n $v_passphrase ]]; then
-    encryption_options=(-O "encryption=on" -O "keylocation=prompt" -O "keyformat=passphrase")
+    encryption_options=(-O "encryption=aes-256-gcm" -O "keylocation=prompt" -O "keyformat=passphrase")
   fi
   set -x
 

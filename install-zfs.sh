@@ -26,6 +26,7 @@ v_passphrase=
 v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_create_options=      # array; see defaults below for format
+v_dataset_create_options=    # string; see help for format
 v_pools_raid_type=()
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
@@ -83,6 +84,10 @@ c_default_rpool_create_options=(
   -O xattr=sa
   -O devices=off
 )
+c_dataset_options_help='# The defaults create a root pool similar to the Ubuntu default; see the script help for details.
+# Double quotes are forbidden; lines starting with a hash (`#`) are ignored.
+# Parameters and command substitutions are applied; useful variables are $c_zfs_mount_dir and $v_rpool_name.
+'
 # Can't include double quotes, due to the templating logic.
 #
 c_default_dataset_create_options='
@@ -264,6 +269,7 @@ The procedure can be entirely automated via environment variables:
 - ZFS_BPOOL_CREATE_OPTIONS   : boot pool options to set on creation (see defaults below)
 - ZFS_RPOOL_CREATE_OPTIONS   : root pool options to set on creation (see defaults below)
 - ZFS_POOLS_RAID_TYPE        : options: blank (striping), `mirror`, `raidz`, `raidz2`, `raidz3`; if unset, it will be asked.
+- ZFS_DATASET_CREATE_OPTIONS : see explanation below
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer); set 0 for no swap
 - ZFS_FREE_TAIL_SPACE        : leave free space at the end of each disk (integer), for example, for a swap partition
@@ -279,6 +285,19 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 Boot pool default create options: '"${c_default_bpool_create_options[*]/#-/$'\n'  -}"'
 
 Root pool default create options: '"${c_default_rpool_create_options[*]/#-/$'\n'  -}"'
+
+The root pool dataset creation options can be specified by passing a string of whom each line has:
+
+- the dataset name (without the pool)
+- the options (without `-o`)
+
+The defaults, which create a root pool similar to the Ubuntu default, are:
+
+'"$(echo -n "$c_default_dataset_create_options" | sed 's/^/  /')"'
+
+Double quotes are forbidden. Parameters and command substitutions are applied; useful variables are $c_zfs_mount_dir and $v_rpool_name.
+
+Datasets are created after the operating system is installed; at that stage, it'\'' mounted in the directory specified by $c_zfs_mount_dir.
 '
 
   echo "$help"
@@ -552,6 +571,12 @@ export ZFS_FREE_TAIL_SPACE=12
   trap _exit_hook EXIT
 }
 
+# Whiptail's lack of multiline editing is quite painful.
+#
+function install_dialog_package {
+  apt install -y dialog
+}
+
 function select_disks {
   if [[ -n ${ZFS_SELECTED_DISKS:-} ]]; then
     mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
@@ -774,6 +799,29 @@ The encryption/mount-related options are automatically added, and must not be sp
   mapfile -d' ' -t v_rpool_create_options < <(echo -n "$raw_rpool_create_options")
 
   print_variables v_bpool_create_options v_rpool_create_options
+}
+
+function ask_dataset_create_options {
+  if [[ -n ${ZFS_DATASET_CREATE_OPTIONS:-} ]]; then
+    v_dataset_create_options=$ZFS_DATASET_CREATE_OPTIONS
+  else
+    while true; do
+      local tempfile
+      tempfile=$(mktemp)
+
+      echo "$c_dataset_options_help$c_default_dataset_create_options" > "$tempfile"
+
+      local user_value
+      user_value=$(dialog --editbox "$tempfile" 30 120 3>&1 1>&2 2>&3)
+
+      if [[ -n $user_value && $user_value != *\"* ]]; then
+        v_dataset_create_options=$(echo "$user_value" | perl -ne 'print unless /^\s*#/')
+        break
+      fi
+    done
+  fi
+
+  print_variables v_dataset_create_options
 }
 
 function install_host_packages {
@@ -1102,7 +1150,7 @@ function create_pools_and_datasets {
   # DATASETS CREATION ##################
 
   local interpolated_dataset_create_options
-  interpolated_dataset_create_options=$(eval echo \""$c_default_dataset_create_options"\")
+  interpolated_dataset_create_options=$(eval echo \""$v_dataset_create_options"\")
 
   echo "Interpolated dataset create options:"
   echo "$interpolated_dataset_create_options"
@@ -1466,6 +1514,7 @@ invoke "find_suitable_disks"
 invoke "set_zfs_ppa_requirement"
 invoke "register_exit_hook"
 invoke "create_passphrase_named_pipe"
+invoke "install_dialog_package"
 
 invoke "select_disks"
 invoke "select_pools_raid_type"
@@ -1476,6 +1525,7 @@ invoke "ask_swap_size"
 invoke "ask_free_tail_space"
 invoke "ask_rpool_name"
 invoke "ask_pool_create_options"
+invoke "ask_dataset_create_options"
 
 invoke "install_host_packages"
 invoke "setup_partitions"

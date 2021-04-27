@@ -167,6 +167,7 @@ function invoke {
 #
 function hot_swap_script {
   if [[ -f $c_hotswap_file ]]; then
+    # shellcheck disable=1090 # can't follow; the file might not exist anyway.
     source "$c_hotswap_file"
   fi
 }
@@ -1339,43 +1340,6 @@ function fix_filesystem_mount_ordering {
   chroot_execute "sed -Ei 's|$c_zfs_mount_dir/?|/|' /etc/zfs/zfs-list.cache/*"
 }
 
-# We don't care about synchronizing with the `fstrim` service for two reasons:
-#
-# - we assume that there are no other (significantly) large filesystems;
-# - trimming is fast (takes minutes on a 1 TB disk).
-#
-# The code is a straight copy of the `fstrim` service.
-#
-function configure_pools_trimming {
-  chroot_execute "cat > /lib/systemd/system/zfs-trim.service << UNIT
-[Unit]
-Description=Discard unused ZFS blocks
-ConditionVirtualization=!container
-
-[Service]
-Type=oneshot
-ExecStart=/sbin/zpool trim $c_bpool_name
-ExecStart=/sbin/zpool trim $v_rpool_name
-UNIT"
-
-  chroot_execute "  cat > /lib/systemd/system/zfs-trim.timer << TIMER
-[Unit]
-Description=Discard unused ZFS blocks once a week
-ConditionVirtualization=!container
-
-[Timer]
-OnCalendar=weekly
-AccuracySec=1h
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-TIMER"
-
-  chroot_execute "systemctl daemon-reload"
-  chroot_execute "systemctl enable zfs-trim.timer"
-}
-
 function configure_remaining_settings {
   [[ $v_swap_size -gt 0 ]] && chroot_execute "echo /dev/zvol/$v_rpool_name/swap none swap discard 0 0 >> /etc/fstab" || true
   chroot_execute "echo RESUME=none > /etc/initramfs-tools/conf.d/resume"
@@ -1480,7 +1444,6 @@ invoke "configure_and_update_grub"
 invoke "sync_efi_partitions"
 invoke "update_initramfs"
 invoke "fix_filesystem_mount_ordering"
-invoke "configure_pools_trimming"
 invoke "configure_remaining_settings"
 
 invoke "prepare_for_system_exit"

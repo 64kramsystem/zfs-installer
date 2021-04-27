@@ -82,6 +82,34 @@ c_default_rpool_create_options=(
   -O xattr=sa
   -O devices=off
 )
+# Can't include double quotes, due to the templating logic.
+#
+c_default_dataset_create_options='
+ROOT                           mountpoint=/ com.ubuntu.zsys:bootfs=yes com.ubuntu.zsys:last-used=$(date +%s)
+ROOT/srv                       com.ubuntu.zsys:bootfs=no
+ROOT/usr                       canmount=off com.ubuntu.zsys:bootfs=no
+ROOT/usr/local
+ROOT/var                       canmount=off com.ubuntu.zsys:bootfs=no
+ROOT/var/games
+ROOT/var/lib
+ROOT/var/lib/AccountsService
+ROOT/var/lib/apt
+ROOT/var/lib/dpkg
+ROOT/var/lib/NetworkManager
+ROOT/var/log
+ROOT/var/mail
+ROOT/var/snap
+ROOT/var/spool
+ROOT/var/www
+ROOT/tmp                       com.ubuntu.zsys:bootfs=no
+
+USERDATA                       mountpoint=/ canmount=off
+USERDATA/root                  mountpoint=/root canmount=on com.ubuntu.zsys:bootfs-datasets=$v_rpool_name/ROOT
+
+$(find $c_installed_os_mount_dir/home -mindepth 1 -maxdepth 1 -printf '\''
+USERDATA/%P                    mountpoint=/home/%P canmount=on com.ubuntu.zsys:bootfs-datasets=$v_rpool_name/%P
+'\'')
+'
 c_zfs_mount_dir=/mnt
 c_installed_os_mount_dir=/target
 declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
@@ -1067,7 +1095,7 @@ function custom_install_operating_system {
   sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
-function create_pools {
+function create_pools_and_datasets {
   # POOL OPTIONS #######################
 
   local encryption_options=()
@@ -1085,9 +1113,10 @@ function create_pools {
     bpool_disks_partitions+=("${selected_disk}-part2")
   done
 
-  # POOLS CREATION #####################
+  # ROOT POOL CREATION #################
 
-  # The root pool must be created first, since the boot pool mountpoint is inside it.
+  # In this script, the boot pool doesn't have a root dataset; since its creation will mount /boot,
+  # it needs to be done after the root pool root dataset is created.
 
   set +x
   echo -n "$v_passphrase" > "$c_passphrase_named_pipe" &
@@ -1102,9 +1131,41 @@ function create_pools {
   zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_create_options[@]}" \
-    -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
+    -O mountpoint=/ -O canmount=off -R "$c_zfs_mount_dir" -f \
     "$v_rpool_name" "${v_pools_raid_type[@]}" "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
+
+  # DATASETS CREATION ##################
+
+  local interpolated_dataset_create_options
+  interpolated_dataset_create_options=$(eval echo \""$c_default_dataset_create_options"\")
+
+  echo "Interpolated dataset create options:"
+  echo "$interpolated_dataset_create_options"
+  echo
+
+  while read -r dataset_metadata_line || [[ -n $dataset_metadata_line ]]; do
+    if [[ $dataset_metadata_line =~ [^[:space:]] ]]; then
+      local dataset_metadata_entries
+      # shellcheck disable=2206 # cheating for simplicity (alternative: sed and mapfile).
+      dataset_metadata_entries=($dataset_metadata_line)
+
+      local dataset=$v_rpool_name/${dataset_metadata_entries[0]}
+      local options=("${dataset_metadata_entries[@]:1}")
+
+      # Prepend the `-o`.
+      #
+      # shellcheck disable=2068 # cheating for simplicity (otherwise each `-o $option` will be a single
+      # string).
+      zfs create ${options[@]/#/-o } "$dataset"
+    fi
+  done < <(echo "$interpolated_dataset_create_options")
+
+  chmod 700 /mnt/root
+  # This is fine independently of the user creating a dataset for /tmp or not.
+  chmod 1777 /mnt/tmp
+
+  # BOOT POOL CREATION #################
 
   zpool create \
     "${v_bpool_create_options[@]}" \
@@ -1512,12 +1573,12 @@ if [[ -z ${ZFS_OS_INSTALLATION_SCRIPT:-} ]]; then
   # Includes the O/S extra configuration, if necessary (network, root pwd, etc.)
   invoke "install_operating_system"
 
-  invoke "create_pools"
+  invoke "create_pools_and_datasets"
   invoke "create_swap_volume"
   invoke "sync_os_temp_installation_dir_to_rpool"
   invoke "remove_temp_partition_and_expand_rpool"
 else
-  invoke "create_pools"
+  invoke "create_pools_and_datasets"
   invoke "create_swap_volume"
   invoke "remove_temp_partition_and_expand_rpool"
 

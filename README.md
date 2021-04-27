@@ -40,7 +40,7 @@ The program currently supports:
 - Linux Mint 19.x, 20
 - ElementaryOS 5.1
 
-The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
+The ZFS version installed is 0.8 (optionally, 2.x), which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
 
 EFI boot is required (any modern (2011+) system will do); legacy boot is currently not supported.
 

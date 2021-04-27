@@ -308,7 +308,7 @@ function check_prerequisites {
   elif [[ $(id -u) -ne 0 ]]; then
     echo 'This script must be run with administrative privileges!'
     exit 1
-  elif [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" != "" && ! -x "$ZFS_OS_INSTALLATION_SCRIPT" ]]; then
+  elif [[ -n ${ZFS_OS_INSTALLATION_SCRIPT:-} && ! -x $ZFS_OS_INSTALLATION_SCRIPT ]]; then
     echo "The custom O/S installation script provided doesn't exist or is not executable!"
     exit 1
   elif [[ ! -v c_supported_linux_distributions["$v_linux_distribution"] ]]; then
@@ -337,7 +337,7 @@ This script will prepare the ZFS pools on the system, install Ubuntu, and config
 In order to stop the procedure, hit Esc twice during dialogs (excluding yes/no ones), or Ctrl+C while any operation is running.
 '
 
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+  if [[ -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
     whiptail --msgbox "$dialog_message" 30 100
   fi
 }
@@ -525,7 +525,7 @@ export ZFS_FREE_TAIL_SPACE=12
 }
 
 function select_disks {
-  if [[ "${ZFS_SELECTED_DISKS:-}" != "" ]]; then
+  if [[ -n ${ZFS_SELECTED_DISKS:-} ]]; then
     mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
   else
     while true; do
@@ -608,13 +608,13 @@ function select_pools_raid_type {
 
 function ask_root_password_Debian {
   set +x
-  if [[ ${ZFS_DEBIAN_ROOT_PASSWORD:-} != "" ]]; then
+  if [[ -n ${ZFS_DEBIAN_ROOT_PASSWORD:-} ]]; then
     v_root_password="$ZFS_DEBIAN_ROOT_PASSWORD"
   else
     local password_invalid_message=
     local password_repeat=-
 
-    while [[ "$v_root_password" != "$password_repeat" || "$v_root_password" == "" ]]; do
+    while [[ $v_root_password != "$password_repeat" || -z $v_root_password ]]; do
       v_root_password=$(whiptail --passwordbox "${password_invalid_message}Please enter the root account password (can't be empty):" 30 100 3>&1 1>&2 2>&3)
       password_repeat=$(whiptail --passwordbox "Please repeat the password:" 30 100 3>&1 1>&2 2>&3)
 
@@ -655,7 +655,7 @@ Leave blank to keep encryption disabled.
 }
 
 function ask_boot_partition_size {
-  if [[ ${ZFS_BOOT_PARTITION_SIZE:-} != "" ]]; then
+  if [[ -n ${ZFS_BOOT_PARTITION_SIZE:-} ]]; then
     v_boot_partition_size=$ZFS_BOOT_PARTITION_SIZE
   else
    local boot_partition_size_invalid_message=
@@ -673,7 +673,7 @@ Supported formats: '512M', '3G'" 30 100 ${c_default_boot_partition_size}M 3>&1 1
 }
 
 function ask_swap_size {
-  if [[ ${ZFS_SWAP_SIZE:-} != "" ]]; then
+  if [[ -n ${ZFS_SWAP_SIZE:-} ]]; then
     v_swap_size=$ZFS_SWAP_SIZE
   else
    local swap_size_invalid_message=
@@ -689,7 +689,7 @@ function ask_swap_size {
 }
 
 function ask_free_tail_space {
-  if [[ ${ZFS_FREE_TAIL_SPACE:-} != "" ]]; then
+  if [[ -n ${ZFS_FREE_TAIL_SPACE:-} ]]; then
     v_free_tail_space=$ZFS_FREE_TAIL_SPACE
   else
     local tail_space_invalid_message=
@@ -713,7 +713,7 @@ For detailed informations, see the wiki page: https://github.com/saveriomiroddi/
 }
 
 function ask_rpool_name {
-  if [[ ${ZFS_RPOOL_NAME:-} != "" ]]; then
+  if [[ -n ${ZFS_RPOOL_NAME:-} ]]; then
     v_rpool_name=$ZFS_RPOOL_NAME
   else
     local rpool_name_invalid_message=
@@ -907,7 +907,7 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 - at the end, choose `Continue Testing`
 '
 
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+  if [[ -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
     whiptail --msgbox "$dialog_message" 30 100
   fi
 
@@ -952,7 +952,7 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 - at the end, uncheck `Restart now`, and click `Done`
 '
 
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+  if [[ -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
     whiptail --msgbox "$dialog_message" 30 100
   fi
 
@@ -1382,7 +1382,7 @@ function display_exit_banner {
 
 You now need to perform a hard reset, then enjoy your ZFS system :-)"
 
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+  if [[ -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
     whiptail --msgbox "$dialog_message" 30 100
   fi
 }
@@ -1419,7 +1419,7 @@ invoke "ask_pool_create_options"
 invoke "install_host_packages"
 invoke "setup_partitions"
 
-if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
+if [[ -z ${ZFS_OS_INSTALLATION_SCRIPT:-} ]]; then
   # Includes the O/S extra configuration, if necessary (network, root pwd, etc.)
   invoke "install_operating_system"
 

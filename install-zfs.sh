@@ -43,6 +43,8 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 # Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
 # specific to it.
 
+c_hotswap_file=$PWD/install-zfs.hotswap.sh # see hotswap() for an explanation.
+
 c_bpool_name=bpool
 c_ppa=ppa:jonathonf/zfs
 c_efi_system_partition_size=512 # megabytes
@@ -142,6 +144,8 @@ function invoke {
     exit 1
   fi
 
+  hot_swap_script
+
   # Invoke it regardless when it's not optional.
 
   if declare -f "$distro_specific_fx_name" > /dev/null; then
@@ -152,6 +156,18 @@ function invoke {
     print_step_info_header "$base_fx_name"
 
     "$base_fx_name"
+  fi
+}
+
+# Tee-hee-hee!!
+#
+# This is extremely useful for debugging long procedures. Since bash scripts can't be modified while
+# running, this allows the dev to create a snapshot, and if the script fails after that, resume and
+# add the hotswap script, so that the new code will be loaded automatically.
+#
+function hot_swap_script {
+  if [[ -f $c_hotswap_file ]]; then
+    source "$c_hotswap_file"
   fi
 }
 

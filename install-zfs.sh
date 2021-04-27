@@ -145,21 +145,22 @@ function invoke {
   # Invoke it regardless when it's not optional.
 
   if declare -f "$distro_specific_fx_name" > /dev/null; then
+    print_step_info_header "$distro_specific_fx_name"
+
     "$distro_specific_fx_name"
   elif declare -f "$base_fx_name" > /dev/null || [[ ! $invoke_option == "--optional" ]]; then
+    print_step_info_header "$base_fx_name"
+
     "$base_fx_name"
   fi
 }
 
-# shellcheck disable=SC2120 # allow parameters passing even if no calls pass any
 function print_step_info_header {
+  local function_name=$1
+
   echo -n "
 ###############################################################################
-# ${FUNCNAME[1]}"
-
-  [[ "${1:-}" != "" ]] && echo -n " $1" || true
-
-  echo "
+# $function_name
 ###############################################################################
 "
 }
@@ -241,8 +242,6 @@ Root pool default create options: '"${c_default_rpool_create_options[*]/#-/$'\n'
 }
 
 function activate_debug {
-  print_step_info_header
-
   mkdir -p "$c_log_dir"
 
   exec 5> "$c_install_log"
@@ -261,8 +260,6 @@ function set_distribution_data {
 }
 
 function store_os_distro_information {
-  print_step_info_header
-
   lsb_release --all > "$c_os_information_log"
 
   # Madness, in order not to force the user to invoke "sudo -E".
@@ -286,8 +283,6 @@ function store_running_processes {
 }
 
 function check_prerequisites {
-  print_step_info_header
-
   local distro_version_regex=\\b${v_linux_version//./\\.}\\b
 
   if [[ ! -d /sys/firmware/efi ]]; then
@@ -318,8 +313,6 @@ function check_prerequisites {
 }
 
 function display_intro_banner {
-  print_step_info_header
-
   local dialog_message='Hello!
 
 This script will prepare the ZFS pools on the system, install Ubuntu, and configure the boot.
@@ -351,8 +344,6 @@ In such cases, the module building may fail abruptly, either without visible err
 }
 
 function save_disks_log {
-  print_step_info_header
-
   # shellcheck disable=SC2012 # `ls` may clean the output, but in this case, it doesn't matter
   ls -l /dev/disk/by-id | tail -n +2 | perl -lane 'print "@F[8..10]"' > "$c_disks_log"
 
@@ -370,8 +361,6 @@ LOG
 }
 
 function find_suitable_disks {
-  print_step_info_header
-
   # In some freaky cases, `/dev/disk/by-id` is not up to date, so we refresh. One case is after
   # starting a VirtualBox VM that is a full clone of a suspended VM with snapshots.
   #
@@ -436,8 +425,6 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
 # install_host_packages() and install_host_packages_UbuntuServer().
 #
 function set_zfs_ppa_requirement {
-  print_step_info_header
-
   apt update
 
   local zfs_package_version
@@ -460,8 +447,6 @@ function set_zfs_ppa_requirement_Debian {
 # to it being incorrectly setup).
 #
 function set_zfs_ppa_requirement_Linuxmint {
-  print_step_info_header
-
   perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
 
   set_zfs_ppa_requirement
@@ -471,14 +456,10 @@ function set_zfs_ppa_requirement_Linuxmint {
 # from the logs.
 #
 function create_passphrase_named_pipe {
-  print_step_info_header
-
   mkfifo "$c_passphrase_named_pipe"
 }
 
 function register_exit_hook {
-  print_step_info_header
-
   function _exit_hook {
     rm -f "$c_passphrase_named_pipe"
 
@@ -527,8 +508,6 @@ export ZFS_FREE_TAIL_SPACE=12
 }
 
 function select_disks {
-  print_step_info_header
-
   if [[ "${ZFS_SELECTED_DISKS:-}" != "" ]]; then
     mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
   else
@@ -568,8 +547,6 @@ Devices with mounted partitions, cdroms, and removable devices are not displayed
 }
 
 function select_pools_raid_type {
-  print_step_info_header
-
   local raw_pools_raid_type=
 
   if [[ -v ZFS_POOLS_RAID_TYPE ]]; then
@@ -613,8 +590,6 @@ function select_pools_raid_type {
 }
 
 function ask_root_password_Debian {
-  print_step_info_header
-
   set +x
   if [[ ${ZFS_DEBIAN_ROOT_PASSWORD:-} != "" ]]; then
     v_root_password="$ZFS_DEBIAN_ROOT_PASSWORD"
@@ -633,8 +608,6 @@ function ask_root_password_Debian {
 }
 
 function ask_encryption {
-  print_step_info_header
-
   set +x
 
   if [[ -v ZFS_PASSPHRASE ]]; then
@@ -665,8 +638,6 @@ Leave blank to keep encryption disabled.
 }
 
 function ask_boot_partition_size {
-  print_step_info_header
-
   if [[ ${ZFS_BOOT_PARTITION_SIZE:-} != "" ]]; then
     v_boot_partition_size=$ZFS_BOOT_PARTITION_SIZE
   else
@@ -685,8 +656,6 @@ Supported formats: '512M', '3G'" 30 100 ${c_default_boot_partition_size}M 3>&1 1
 }
 
 function ask_swap_size {
-  print_step_info_header
-
   if [[ ${ZFS_SWAP_SIZE:-} != "" ]]; then
     v_swap_size=$ZFS_SWAP_SIZE
   else
@@ -703,8 +672,6 @@ function ask_swap_size {
 }
 
 function ask_free_tail_space {
-  print_step_info_header
-
   if [[ ${ZFS_FREE_TAIL_SPACE:-} != "" ]]; then
     v_free_tail_space=$ZFS_FREE_TAIL_SPACE
   else
@@ -729,8 +696,6 @@ For detailed informations, see the wiki page: https://github.com/saveriomiroddi/
 }
 
 function ask_rpool_name {
-  print_step_info_header
-
   if [[ ${ZFS_RPOOL_NAME:-} != "" ]]; then
     v_rpool_name=$ZFS_RPOOL_NAME
   else
@@ -747,8 +712,6 @@ function ask_rpool_name {
 }
 
 function ask_pool_create_options {
-  print_step_info_header
-
   local bpool_create_options_message='Insert the create options for the boot pool
 
 The mount-related options are automatically added, and must not be specified.'
@@ -769,8 +732,6 @@ The encryption/mount-related options are automatically added, and must not be sp
 }
 
 function install_host_packages {
-  print_step_info_header
-
   if [[ $v_use_ppa == "1" ]]; then
     if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
       add-apt-repository --yes "$c_ppa"
@@ -795,8 +756,6 @@ function install_host_packages {
 }
 
 function install_host_packages_Debian {
-  print_step_info_header
-
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
@@ -817,16 +776,12 @@ function install_host_packages_Debian {
 # Differently from Ubuntu, Mint doesn't have the package installed in the live version.
 #
 function install_host_packages_Linuxmint {
-  print_step_info_header
-
   apt install --yes zfsutils-linux
 
   install_host_packages
 }
 
 function install_host_packages_elementary {
-  print_step_info_header
-
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     apt update
     apt install --yes software-properties-common
@@ -836,8 +791,6 @@ function install_host_packages_elementary {
 }
 
 function install_host_packages_UbuntuServer {
-  print_step_info_header
-
   if [[ $v_use_ppa != "1" ]]; then
     apt install --yes zfsutils-linux efibootmgr
 
@@ -869,8 +822,6 @@ function install_host_packages_UbuntuServer {
 }
 
 function setup_partitions {
-  print_step_info_header
-
   local required_tail_space=$((v_free_tail_space > c_temporary_volume_size ? v_free_tail_space : c_temporary_volume_size))
 
   for selected_disk in "${v_selected_disks[@]}"; do
@@ -926,8 +877,6 @@ function setup_partitions {
 }
 
 function install_operating_system {
-  print_step_info_header
-
   local dialog_message='The Ubuntu GUI installer will now be launched.
 
 Proceed with the configuration as usual, then, at the partitioning stage:
@@ -969,8 +918,6 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 }
 
 function install_operating_system_Debian {
-  print_step_info_header
-
   # The temporary volume size displayed is an approximation of the format used by the installer,
   # but it's acceptable - the complexity required is not worth (eg. converting hypothetical units,
   # etc.).
@@ -1023,8 +970,6 @@ CONF
 }
 
 function install_operating_system_UbuntuServer {
-  print_step_info_header
-
   # O/S Installation
   #
   # Subiquity is designed to prevent the user from opening a terminal, which is (to say the least)
@@ -1066,8 +1011,6 @@ You can switch anytime to this terminal, and back, in order to read the instruct
 }
 
 function custom_install_operating_system {
-  print_step_info_header
-
   sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
@@ -1118,8 +1061,6 @@ function create_pools {
 }
 
 function create_swap_volume {
-  print_step_info_header
-
   if [[ $v_swap_size -gt 0 ]]; then
     zfs create \
       -V "${v_swap_size}G" -b "$(getconf PAGESIZE)" \
@@ -1131,15 +1072,11 @@ function create_swap_volume {
 }
 
 function copy_zpool_cache {
-  print_step_info_header
-
   mkdir -p "$c_zfs_mount_dir/etc/zfs"
   cp /etc/zfs/zpool.cache "$c_zfs_mount_dir/etc/zfs/"
 }
 
 function sync_os_temp_installation_dir_to_rpool {
-  print_step_info_header
-
   # On Ubuntu Server, `/boot/efi` and `/cdrom` (!!!) are mounted, but they're not needed.
   #
   local mount_dir_submounts
@@ -1172,8 +1109,6 @@ function sync_os_temp_installation_dir_to_rpool {
 }
 
 function remove_temp_partition_and_expand_rpool {
-  print_step_info_header
-
   if (( v_free_tail_space < c_temporary_volume_size )); then
     if [[ $v_free_tail_space -eq 0 ]]; then
       local resize_reference=100%
@@ -1208,8 +1143,6 @@ function remove_temp_partition_and_expand_rpool {
 }
 
 function prepare_jail {
-  print_step_info_header
-
   for virtual_fs_dir in proc sys dev; do
     mount --rbind "/$virtual_fs_dir" "$c_zfs_mount_dir/$virtual_fs_dir"
   done
@@ -1220,8 +1153,6 @@ function prepare_jail {
 # See install_host_packages() for some comments.
 #
 function install_jail_zfs_packages {
-  print_step_info_header
-
   if [[ $v_use_ppa == "1" ]]; then
     chroot_execute "add-apt-repository --yes $c_ppa"
 
@@ -1246,8 +1177,6 @@ function install_jail_zfs_packages {
 }
 
 function install_jail_zfs_packages_Debian {
-  print_step_info_header
-
   chroot_execute 'echo "deb http://deb.debian.org/debian buster main contrib"     >> /etc/apt/sources.list'
   chroot_execute 'echo "deb-src http://deb.debian.org/debian buster main contrib" >> /etc/apt/sources.list'
 
@@ -1267,16 +1196,12 @@ APT'
 }
 
 function install_jail_zfs_packages_elementary {
-  print_step_info_header
-
   chroot_execute "apt install --yes software-properties-common"
 
   install_jail_zfs_packages
 }
 
 function install_jail_zfs_packages_UbuntuServer {
-  print_step_info_header
-
   if [[ $v_use_ppa != "1" ]]; then
     chroot_execute "apt install --yes zfsutils-linux zfs-initramfs grub-efi-amd64-signed shim-signed"
   else
@@ -1285,8 +1210,6 @@ function install_jail_zfs_packages_UbuntuServer {
 }
 
 function prepare_efi_partition {
-  print_step_info_header
-
   # The other mounts are configured/synced in the EFI partitions sync stage.
   #
   chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[0]}"-part1) /boot/efi vfat defaults 0 0 > /etc/fstab"
@@ -1298,8 +1221,6 @@ function prepare_efi_partition {
 }
 
 function configure_and_update_grub {
-  print_step_info_header
-
   chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'        /etc/default/grub"
 
   # Silence warning during the grub probe (source: https://git.io/JenXF).
@@ -1326,8 +1247,6 @@ function configure_and_update_grub {
 }
 
 function sync_efi_partitions {
-  print_step_info_header
-
   for ((i = 1; i < ${#v_selected_disks[@]}; i++)); do
     local synced_efi_partition_path="/boot/efi$((i + 1))"
 
@@ -1350,14 +1269,10 @@ function sync_efi_partitions {
 # See issue https://github.com/saveriomiroddi/zfs-installer/issues/110.
 #
 function update_initramfs {
-  print_step_info_header
-
   chroot_execute "update-initramfs -u"
 }
 
 function fix_filesystem_mount_ordering {
-  print_step_info_header
-
   chroot_execute "mkdir /etc/zfs/zfs-list.cache"
   chroot_execute "touch /etc/zfs/zfs-list.cache/$c_bpool_name /etc/zfs/zfs-list.cache/$v_rpool_name"
 
@@ -1416,8 +1331,6 @@ function fix_filesystem_mount_ordering {
 # The code is a straight copy of the `fstrim` service.
 #
 function configure_pools_trimming {
-  print_step_info_header
-
   chroot_execute "cat > /lib/systemd/system/zfs-trim.service << UNIT
 [Unit]
 Description=Discard unused ZFS blocks
@@ -1448,15 +1361,11 @@ TIMER"
 }
 
 function configure_remaining_settings {
-  print_step_info_header
-
   [[ $v_swap_size -gt 0 ]] && chroot_execute "echo /dev/zvol/$v_rpool_name/swap none swap discard 0 0 >> /etc/fstab" || true
   chroot_execute "echo RESUME=none > /etc/initramfs-tools/conf.d/resume"
 }
 
 function prepare_for_system_exit {
-  print_step_info_header
-
   for virtual_fs_dir in dev sys proc; do
     umount --recursive --force --lazy "$c_zfs_mount_dir/$virtual_fs_dir"
   done
@@ -1489,8 +1398,6 @@ function prepare_for_system_exit {
 }
 
 function display_exit_banner {
-  print_step_info_header
-
   local dialog_message="The system has been successfully prepared and installed.
 
 You now need to perform a hard reset, then enjoy your ZFS system :-)"

@@ -41,11 +41,10 @@ The advantages of this project over the Ubuntu installer are:
 1. it supports pools configuration;
 1. it allows specifying the RAID type;
 1. it allows customization of the disk partitions;
-1. it supports additional features (e.g. encryption);
+1. it supports additional features (e.g. encryption and trimming);
 1. it supports new OpenZFS versions, via PPA `jonathonf/zfs`.
 1. it supports many more operating systems;
 1. it supports unattended installations, via custom scripts;
-1. it installs a convenient trimming job for ZFS pools;
 1. it's easy to extend.
 
 The disadvantages are:

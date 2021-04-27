@@ -66,7 +66,7 @@ c_default_rpool_create_options=(
   -O devices=off
 )
 c_zfs_mount_dir=/mnt
-c_installed_os_data_mount_dir=/target
+c_installed_os_mount_dir=/target
 declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
@@ -914,11 +914,11 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   #
   # Note that we assume that the user created only one partition on the temp volume, as expected.
   #
-  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
-    mount "$v_temp_volume_device" "$c_installed_os_data_mount_dir"
+  if ! mountpoint -q "$c_installed_os_mount_dir"; then
+    mount "$v_temp_volume_device" "$c_installed_os_mount_dir"
   fi
 
-  rm -f "$c_installed_os_data_mount_dir/swapfile"
+  rm -f "$c_installed_os_mount_dir/swapfile"
 }
 
 function install_operating_system_Debian {
@@ -949,24 +949,24 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 
   DISPLAY=:0 calamares
 
-  mkdir -p "$c_installed_os_data_mount_dir"
+  mkdir -p "$c_installed_os_mount_dir"
 
   # Note how in Debian, for reasons currenly unclear, the mount fails if the partition is passed;
   # it requires the device to be passed.
   #
-  mount "${v_temp_volume_device}" "$c_installed_os_data_mount_dir"
+  mount "${v_temp_volume_device}" "$c_installed_os_mount_dir"
 
   # We don't use chroot()_execute here, as it works on $c_zfs_mount_dir (which is synced on a
   # later stage).
   #
   set +x
-  chroot "$c_installed_os_data_mount_dir" bash -c "echo root:$(printf "%q" "$v_root_password") | chpasswd"
+  chroot "$c_installed_os_mount_dir" bash -c "echo root:$(printf "%q" "$v_root_password") | chpasswd"
   set -x
 
   # The installer doesn't set the network interfaces, so, for convenience, we do it.
   #
   for interface in $(ip addr show | perl -lne '/^\d+: (?!lo:)(\w+)/ && print $1' ); do
-    cat > "$c_installed_os_data_mount_dir/etc/network/interfaces.d/$interface" <<CONF
+    cat > "$c_installed_os_mount_dir/etc/network/interfaces.d/$interface" <<CONF
   auto $interface
   iface $interface inet dhcp
 CONF
@@ -1007,11 +1007,11 @@ You can switch anytime to this terminal, and back, in order to read the instruct
   # See note in install_operating_system(). It's not clear whether this is required on Ubuntu
   # Server, but it's better not to take risks.
   #
-  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
-    mount "${v_temp_volume_device}p2" "$c_installed_os_data_mount_dir"
+  if ! mountpoint -q "$c_installed_os_mount_dir"; then
+    mount "${v_temp_volume_device}p2" "$c_installed_os_mount_dir"
   fi
 
-  rm -f "$c_installed_os_data_mount_dir"/swap.img
+  rm -f "$c_installed_os_mount_dir"/swap.img
 }
 
 function custom_install_operating_system {
@@ -1078,7 +1078,7 @@ function sync_os_temp_installation_dir_to_rpool {
   # On Ubuntu Server, `/boot/efi` and `/cdrom` (!!!) are mounted, but they're not needed.
   #
   local mount_dir_submounts
-  mount_dir_submounts=$(mount | MOUNT_DIR="${c_installed_os_data_mount_dir%/}" perl -lane 'print $F[2] if $F[2] =~ /$ENV{MOUNT_DIR}\//')
+  mount_dir_submounts=$(mount | MOUNT_DIR="${c_installed_os_mount_dir%/}" perl -lane 'print $F[2] if $F[2] =~ /$ENV{MOUNT_DIR}\//')
 
   for mount_dir in $mount_dir_submounts; do
     umount "$mount_dir"
@@ -1091,7 +1091,7 @@ function sync_os_temp_installation_dir_to_rpool {
   # `/run` is not needed (with an exception), and in Ubuntu Server it's actually a nuisance, since
   # some files vanish while syncing. Debian is well-behaved, and `/run` is empty.
   #
-  rsync -avX --exclude=/run --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
+  rsync -avX --exclude=/run --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
@@ -1101,13 +1101,13 @@ function sync_os_temp_installation_dir_to_rpool {
   # As of Jun/2021, it's not clear if there is any O/S leaving the dir/file, but for simplicity, we
   # always create them if not existing.
   #
-  mkdir -p "$c_installed_os_data_mount_dir/run/systemd/resolve"
-  touch "$c_installed_os_data_mount_dir/run/systemd/resolve/stub-resolv.conf"
+  mkdir -p "$c_installed_os_mount_dir/run/systemd/resolve"
+  touch "$c_installed_os_mount_dir/run/systemd/resolve/stub-resolv.conf"
 
   mkdir "$c_zfs_mount_dir/run"
-  rsync -av --relative "$c_installed_os_data_mount_dir/run/./systemd/resolve" "$c_zfs_mount_dir/run"
+  rsync -av --relative "$c_installed_os_mount_dir/run/./systemd/resolve" "$c_zfs_mount_dir/run"
 
-  umount "$c_installed_os_data_mount_dir"
+  umount "$c_installed_os_mount_dir"
 }
 
 function remove_temp_partition_and_expand_rpool {
@@ -1341,7 +1341,7 @@ function update_zed_cache_Debian {
 
   chroot_execute "pkill zed"
 
-  chroot_execute "sed -Ei 's|$c_installed_os_data_mount_dir/?|/|' /etc/zfs/zfs-list.cache/$v_rpool_name"
+  chroot_execute "sed -Ei 's|$c_installed_os_mount_dir/?|/|' /etc/zfs/zfs-list.cache/$v_rpool_name"
 }
 
 function configure_remaining_settings {

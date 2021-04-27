@@ -465,7 +465,7 @@ function set_zfs_ppa_requirement_Debian {
 function set_zfs_ppa_requirement_Linuxmint {
   perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
 
-  set_zfs_ppa_requirement
+  invoke "set_zfs_ppa_requirement"
 }
 
 # By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
@@ -794,7 +794,7 @@ function install_host_packages_Debian {
 function install_host_packages_Linuxmint {
   apt install --yes zfsutils-linux
 
-  install_host_packages
+  invoke "install_host_packages"
 }
 
 function install_host_packages_elementary {
@@ -803,7 +803,7 @@ function install_host_packages_elementary {
     apt install --yes software-properties-common
   fi
 
-  install_host_packages
+  invoke "install_host_packages"
 }
 
 function install_host_packages_UbuntuServer {
@@ -1214,14 +1214,14 @@ APT'
 function install_jail_zfs_packages_elementary {
   chroot_execute "apt install --yes software-properties-common"
 
-  install_jail_zfs_packages
+  invoke "install_jail_zfs_packages"
 }
 
 function install_jail_zfs_packages_UbuntuServer {
   if [[ $v_use_ppa != "1" ]]; then
     chroot_execute "apt install --yes zfsutils-linux zfs-initramfs grub-efi-amd64-signed shim-signed"
   else
-    install_jail_zfs_packages
+    invoke "install_jail_zfs_packages"
   fi
 }
 

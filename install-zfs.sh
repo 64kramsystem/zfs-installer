@@ -131,6 +131,11 @@ function distro_dependent_invoke {
   local distro_specific_fx_name="$1_$v_linux_distribution"
   local invoke_option=${2:-}
 
+  if [[ ! $invoke_option =~ ^(|--noforce)$ ]]; then
+    >&2 echo "Invalid distro_dependent_invoke() option: $invoke_option"
+    exit 1
+  fi
+
   if declare -f "$distro_specific_fx_name" > /dev/null; then
     "$distro_specific_fx_name"
   else

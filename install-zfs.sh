@@ -107,43 +107,47 @@ c_udevadm_settle_timeout=10 # seconds
 
 # HELPER FUNCTIONS #############################################################
 
-# Chooses a function and invokes it depending on the O/S distribution.
+# Invoke a function, with a primitive dynamic dispatch based on the distribution.
 #
-# Example:
+# Format: `invoke "function" [--optional]`.
+#
+# A target function must exist, otherwise a error is raised, unless `--optional` is specified.
+# `--optional` is useful when a step is specific to a single distribution, e.g. Debian's root password.
+#
+# Examples:
 #
 #   $ function install_jail_zfs_packages { :; }
 #   $ function install_jail_zfs_packages_Debian { :; }
 #   $ distro_dependent_invoke "install_jail_zfs_packages"
 #
-# If the distribution is `Debian`, the second will be invoked, otherwise, the
-# first.
-#
-# If the function is invoked with `--noforce` as second parameter, and there is
-# no matching function:
+#   If the distribution is `Debian`, the second will be invoked, otherwise, the first.
 #
 #   $ function update_zed_cache_Ubuntu { :; }
-#   $ distro_dependent_invoke "install_jail_zfs_packages" --noforce
+#   $ distro_dependent_invoke "update_zed_cache" --optional
 #
-# then nothing happens. Without `--noforce`, this invocation will cause an
-# error.
+#   If the distribution is `Debian`, nothing will happen.
 #
-function distro_dependent_invoke {
-  local distro_specific_fx_name="$1_$v_linux_distribution"
+#   $ function update_zed_cache_Ubuntu { :; }
+#   $ distro_dependent_invoke "update_zed_cache"
+#
+#   If the distribution is `Debian`, an error will be raised.
+#
+function invoke {
+  local base_fx_name=$1
+  local distro_specific_fx_name=$1_$v_linux_distribution
   local invoke_option=${2:-}
 
-  if [[ ! $invoke_option =~ ^(|--noforce)$ ]]; then
-    >&2 echo "Invalid distro_dependent_invoke() option: $invoke_option"
+  if [[ ! $invoke_option =~ ^(|--optional)$ ]]; then
+    >&2 echo "Invalid invoke() option: $invoke_option"
     exit 1
   fi
 
+  # Invoke it regardless when it's not optional.
+
   if declare -f "$distro_specific_fx_name" > /dev/null; then
     "$distro_specific_fx_name"
-  else
-    if ! declare -f "$1" > /dev/null && [[ $invoke_option == "--noforce" ]]; then
-      : # do nothing
-    else
-      "$1"
-    fi
+  elif declare -f "$base_fx_name" > /dev/null || [[ ! $invoke_option == "--optional" ]]; then
+    "$base_fx_name"
   fi
 }
 
@@ -1502,59 +1506,59 @@ if [[ $# -ne 0 ]]; then
   display_help_and_exit
 fi
 
-activate_debug
-set_distribution_data
-distro_dependent_invoke "store_os_distro_information"
-store_running_processes
-check_prerequisites
-display_intro_banner
-check_system_memory
-save_disks_log
-find_suitable_disks
-distro_dependent_invoke "set_zfs_ppa_requirement"
-register_exit_hook
-create_passphrase_named_pipe
+invoke "activate_debug"
+invoke "set_distribution_data"
+invoke "store_os_distro_information"
+invoke "store_running_processes"
+invoke "check_prerequisites"
+invoke "display_intro_banner"
+invoke "check_system_memory"
+invoke "save_disks_log"
+invoke "find_suitable_disks"
+invoke "set_zfs_ppa_requirement"
+invoke "register_exit_hook"
+invoke "create_passphrase_named_pipe"
 
-select_disks
-select_pools_raid_type
-distro_dependent_invoke "ask_root_password" --noforce
-ask_encryption
-ask_boot_partition_size
-ask_swap_size
-ask_free_tail_space
-ask_rpool_name
-ask_pool_create_options
+invoke "select_disks"
+invoke "select_pools_raid_type"
+invoke "ask_root_password" --optional
+invoke "ask_encryption"
+invoke "ask_boot_partition_size"
+invoke "ask_swap_size"
+invoke "ask_free_tail_space"
+invoke "ask_rpool_name"
+invoke "ask_pool_create_options"
 
-distro_dependent_invoke "install_host_packages"
-setup_partitions
+invoke "install_host_packages"
+invoke "setup_partitions"
 
 if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
   # Includes the O/S extra configuration, if necessary (network, root pwd, etc.)
-  distro_dependent_invoke "install_operating_system"
+  invoke "install_operating_system"
 
-  create_pools
-  create_swap_volume
-  copy_zpool_cache
-  sync_os_temp_installation_dir_to_rpool
-  remove_temp_partition_and_expand_rpool
+  invoke "create_pools"
+  invoke "create_swap_volume"
+  invoke "copy_zpool_cache"
+  invoke "sync_os_temp_installation_dir_to_rpool"
+  invoke "remove_temp_partition_and_expand_rpool"
 else
-  create_pools
-  create_swap_volume
-  copy_zpool_cache
-  remove_temp_partition_and_expand_rpool
+  invoke "create_pools"
+  invoke "create_swap_volume"
+  invoke "copy_zpool_cache"
+  invoke "remove_temp_partition_and_expand_rpool"
 
-  custom_install_operating_system
+  invoke "custom_install_operating_system"
 fi
 
-prepare_jail
-distro_dependent_invoke "install_jail_zfs_packages"
-prepare_efi_partition
-configure_and_update_grub
-sync_efi_partitions
-update_initramfs
-fix_filesystem_mount_ordering
-configure_pools_trimming
-configure_remaining_settings
+invoke "prepare_jail"
+invoke "install_jail_zfs_packages"
+invoke "prepare_efi_partition"
+invoke "configure_and_update_grub"
+invoke "sync_efi_partitions"
+invoke "update_initramfs"
+invoke "fix_filesystem_mount_ordering"
+invoke "configure_pools_trimming"
+invoke "configure_remaining_settings"
 
-prepare_for_system_exit
-display_exit_banner
+invoke "prepare_for_system_exit"
+invoke "display_exit_banner"

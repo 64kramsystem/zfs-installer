@@ -110,11 +110,12 @@ c_udevadm_settle_timeout=10 # seconds
 #
 function distro_dependent_invoke {
   local distro_specific_fx_name="$1_$v_linux_distribution"
+  local invoke_option=${2:-}
 
   if declare -f "$distro_specific_fx_name" > /dev/null; then
     "$distro_specific_fx_name"
   else
-    if ! declare -f "$1" > /dev/null && [[ "${2:-}" == "--noforce" ]]; then
+    if ! declare -f "$1" > /dev/null && [[ $invoke_option == "--noforce" ]]; then
       : # do nothing
     else
       "$1"

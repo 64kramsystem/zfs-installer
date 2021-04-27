@@ -149,6 +149,7 @@ function invoke {
 #
 function hot_swap_script {
   if [[ -f $c_hotswap_file ]]; then
+    # shellcheck disable=1090 # can't follow; the file might not exist anyway.
     source "$c_hotswap_file"
   fi
 }

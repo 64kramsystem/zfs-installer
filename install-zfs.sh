@@ -26,6 +26,7 @@ v_passphrase=
 v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_create_options=      # array; see defaults below for format
+v_dataset_create_options=    # string; see help for format
 v_pools_raid_type=()
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
@@ -33,7 +34,7 @@ v_free_tail_space=           # integer
 
 # Variables set during execution
 
-v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
+v_linux_distribution=        # Ubuntu, LinuxMint, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
 v_use_ppa=                   # 1=true, false otherwise (applies only to Ubuntu-based).
 v_temp_volume_device=        # /dev/zdN; scope: setup_partitions -> sync_os_temp_installation_dir_to_rpool
 v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
@@ -42,6 +43,8 @@ v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_d
 #
 # Note that Linux Mint is "Linuxmint" from v20 onwards. This actually helps, since some operations are
 # specific to it.
+
+c_hotswap_file=$PWD/install-zfs.hotswap.sh # see hotswap() for an explanation.
 
 c_bpool_name=bpool
 c_ppa=ppa:jonathonf/zfs
@@ -81,9 +84,41 @@ c_default_rpool_create_options=(
   -O xattr=sa
   -O devices=off
 )
+c_dataset_options_help='# The defaults create a root pool similar to the Ubuntu default; see the script help for details.
+# Double quotes are forbidden; lines starting with a hash (`#`) are ignored.
+# Parameters and command substitutions are applied; useful variables are $c_zfs_mount_dir and $v_rpool_name.
+'
+# Can't include double quotes, due to the templating logic.
+#
+c_default_dataset_create_options='
+ROOT                           mountpoint=/ com.ubuntu.zsys:bootfs=yes com.ubuntu.zsys:last-used=$(date +%s)
+ROOT/srv                       com.ubuntu.zsys:bootfs=no
+ROOT/usr                       canmount=off com.ubuntu.zsys:bootfs=no
+ROOT/usr/local
+ROOT/var                       canmount=off com.ubuntu.zsys:bootfs=no
+ROOT/var/games
+ROOT/var/lib
+ROOT/var/lib/AccountsService
+ROOT/var/lib/apt
+ROOT/var/lib/dpkg
+ROOT/var/lib/NetworkManager
+ROOT/var/log
+ROOT/var/mail
+ROOT/var/snap
+ROOT/var/spool
+ROOT/var/www
+ROOT/tmp                       com.ubuntu.zsys:bootfs=no
+
+USERDATA                       mountpoint=/ canmount=off
+USERDATA/root                  mountpoint=/root canmount=on com.ubuntu.zsys:bootfs-datasets=$v_rpool_name/ROOT
+
+$(find $c_installed_os_mount_dir/home -mindepth 1 -maxdepth 1 -printf '\''
+USERDATA/%P                    mountpoint=/home/%P canmount=on com.ubuntu.zsys:bootfs-datasets=$v_rpool_name/%P
+'\'')
+'
 c_zfs_mount_dir=/mnt
-c_installed_os_data_mount_dir=/target
-declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
+c_installed_os_mount_dir=/target
+declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 
@@ -107,49 +142,75 @@ c_udevadm_settle_timeout=10 # seconds
 
 # HELPER FUNCTIONS #############################################################
 
-# Chooses a function and invokes it depending on the O/S distribution.
+# Invoke a function, with a primitive dynamic dispatch based on the distribution.
 #
-# Example:
+# Format: `invoke "function" [--optional]`.
+#
+# A target function must exist, otherwise a error is raised, unless `--optional` is specified.
+# `--optional` is useful when a step is specific to a single distribution, e.g. Debian's root password.
+#
+# Examples:
 #
 #   $ function install_jail_zfs_packages { :; }
 #   $ function install_jail_zfs_packages_Debian { :; }
 #   $ distro_dependent_invoke "install_jail_zfs_packages"
 #
-# If the distribution is `Debian`, the second will be invoked, otherwise, the
-# first.
-#
-# If the function is invoked with `--noforce` as second parameter, and there is
-# no matching function:
+#   If the distribution is `Debian`, the second will be invoked, otherwise, the first.
 #
 #   $ function update_zed_cache_Ubuntu { :; }
-#   $ distro_dependent_invoke "install_jail_zfs_packages" --noforce
+#   $ distro_dependent_invoke "update_zed_cache" --optional
 #
-# then nothing happens. Without `--noforce`, this invocation will cause an
-# error.
+#   If the distribution is `Debian`, nothing will happen.
 #
-function distro_dependent_invoke {
-  local distro_specific_fx_name="$1_$v_linux_distribution"
+#   $ function update_zed_cache_Ubuntu { :; }
+#   $ distro_dependent_invoke "update_zed_cache"
+#
+#   If the distribution is `Debian`, an error will be raised.
+#
+function invoke {
+  local base_fx_name=$1
+  local distro_specific_fx_name=$1_$v_linux_distribution
+  local invoke_option=${2:-}
+
+  if [[ ! $invoke_option =~ ^(|--optional)$ ]]; then
+    >&2 echo "Invalid invoke() option: $invoke_option"
+    exit 1
+  fi
+
+  hot_swap_script
+
+  # Invoke it regardless when it's not optional.
 
   if declare -f "$distro_specific_fx_name" > /dev/null; then
+    print_step_info_header "$distro_specific_fx_name"
+
     "$distro_specific_fx_name"
-  else
-    if ! declare -f "$1" > /dev/null && [[ "${2:-}" == "--noforce" ]]; then
-      : # do nothing
-    else
-      "$1"
-    fi
+  elif declare -f "$base_fx_name" > /dev/null || [[ ! $invoke_option == "--optional" ]]; then
+    print_step_info_header "$base_fx_name"
+
+    "$base_fx_name"
   fi
 }
 
-# shellcheck disable=SC2120 # allow parameters passing even if no calls pass any
+# Tee-hee-hee!!
+#
+# This is extremely useful for debugging long procedures. Since bash scripts can't be modified while
+# running, this allows the dev to create a snapshot, and if the script fails after that, resume and
+# add the hotswap script, so that the new code will be loaded automatically.
+#
+function hot_swap_script {
+  if [[ -f $c_hotswap_file ]]; then
+    # shellcheck disable=1090 # can't follow; the file might not exist anyway.
+    source "$c_hotswap_file"
+  fi
+}
+
 function print_step_info_header {
+  local function_name=$1
+
   echo -n "
 ###############################################################################
-# ${FUNCNAME[1]}"
-
-  [[ "${1:-}" != "" ]] && echo -n " $1" || true
-
-  echo "
+# $function_name
 ###############################################################################
 "
 }
@@ -208,6 +269,7 @@ The procedure can be entirely automated via environment variables:
 - ZFS_BPOOL_CREATE_OPTIONS   : boot pool options to set on creation (see defaults below)
 - ZFS_RPOOL_CREATE_OPTIONS   : root pool options to set on creation (see defaults below)
 - ZFS_POOLS_RAID_TYPE        : options: blank (striping), `mirror`, `raidz`, `raidz2`, `raidz3`; if unset, it will be asked.
+- ZFS_DATASET_CREATE_OPTIONS : see explanation below
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer); set 0 for no swap
 - ZFS_FREE_TAIL_SPACE        : leave free space at the end of each disk (integer), for example, for a swap partition
@@ -223,6 +285,19 @@ When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounte
 Boot pool default create options: '"${c_default_bpool_create_options[*]/#-/$'\n'  -}"'
 
 Root pool default create options: '"${c_default_rpool_create_options[*]/#-/$'\n'  -}"'
+
+The root pool dataset creation options can be specified by passing a string of whom each line has:
+
+- the dataset name (without the pool)
+- the options (without `-o`)
+
+The defaults, which create a root pool similar to the Ubuntu default, are:
+
+'"$(echo -n "$c_default_dataset_create_options" | sed 's/^/  /')"'
+
+Double quotes are forbidden. Parameters and command substitutions are applied; useful variables are $c_zfs_mount_dir and $v_rpool_name.
+
+Datasets are created after the operating system is installed; at that stage, it'\'' mounted in the directory specified by $c_zfs_mount_dir.
 '
 
   echo "$help"
@@ -231,8 +306,6 @@ Root pool default create options: '"${c_default_rpool_create_options[*]/#-/$'\n'
 }
 
 function activate_debug {
-  print_step_info_header
-
   mkdir -p "$c_log_dir"
 
   exec 5> "$c_install_log"
@@ -251,8 +324,6 @@ function set_distribution_data {
 }
 
 function store_os_distro_information {
-  print_step_info_header
-
   lsb_release --all > "$c_os_information_log"
 
   # Madness, in order not to force the user to invoke "sudo -E".
@@ -276,8 +347,6 @@ function store_running_processes {
 }
 
 function check_prerequisites {
-  print_step_info_header
-
   local distro_version_regex=\\b${v_linux_version//./\\.}\\b
 
   if [[ ! -d /sys/firmware/efi ]]; then
@@ -286,7 +355,7 @@ function check_prerequisites {
   elif [[ $(id -u) -ne 0 ]]; then
     echo 'This script must be run with administrative privileges!'
     exit 1
-  elif [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" != "" && ! -x "$ZFS_OS_INSTALLATION_SCRIPT" ]]; then
+  elif [[ -n ${ZFS_OS_INSTALLATION_SCRIPT:-} && ! -x $ZFS_OS_INSTALLATION_SCRIPT ]]; then
     echo "The custom O/S installation script provided doesn't exist or is not executable!"
     exit 1
   elif [[ ! -v c_supported_linux_distributions["$v_linux_distribution"] ]]; then
@@ -308,8 +377,6 @@ function check_prerequisites {
 }
 
 function display_intro_banner {
-  print_step_info_header
-
   local dialog_message='Hello!
 
 This script will prepare the ZFS pools on the system, install Ubuntu, and configure the boot.
@@ -317,7 +384,7 @@ This script will prepare the ZFS pools on the system, install Ubuntu, and config
 In order to stop the procedure, hit Esc twice during dialogs (excluding yes/no ones), or Ctrl+C while any operation is running.
 '
 
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+  if [[ -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
     whiptail --msgbox "$dialog_message" 30 100
   fi
 }
@@ -340,16 +407,28 @@ In such cases, the module building may fail abruptly, either without visible err
     fi
 }
 
-function find_suitable_disks {
-  print_step_info_header
+function save_disks_log {
+  # shellcheck disable=SC2012 # `ls` may clean the output, but in this case, it doesn't matter
+  ls -l /dev/disk/by-id | tail -n +2 | perl -lane 'print "@F[8..10]"' > "$c_disks_log"
 
+  all_disk_ids=$(find /dev/disk/by-id -mindepth 1 -regextype awk -not -regex '.+-part[0-9]+$' | sort)
+
+  while read -r disk_id || [[ -n $disk_id ]]; do
+    cat >> "$c_disks_log" << LOG
+
+## DEVICE: $disk_id ################################
+
+$(udevadm info --query=property "$(readlink -f "$disk_id")")
+
+LOG
+  done < <(echo -n "$all_disk_ids")
+}
+
+function find_suitable_disks {
   # In some freaky cases, `/dev/disk/by-id` is not up to date, so we refresh. One case is after
   # starting a VirtualBox VM that is a full clone of a suspended VM with snapshots.
   #
   udevadm trigger
-
-  # shellcheck disable=SC2012 # `ls` may clean the output, but in this case, it doesn't matter
-  ls -l /dev/disk/by-id | tail -n +2 | perl -lane 'print "@F[8..10]"' > "$c_disks_log"
 
   local candidate_disk_ids
   local mounted_devices
@@ -380,14 +459,6 @@ function find_suitable_disks {
         v_suitable_disks+=("$disk_id")
       fi
     fi
-
-    cat >> "$c_disks_log" << LOG
-
-## DEVICE: $disk_id ################################
-
-$(udevadm info --query=property "$(readlink -f "$disk_id")")
-
-LOG
   done < <(echo -n "$candidate_disk_ids")
 
   if [[ ${#v_suitable_disks[@]} -eq 0 ]]; then
@@ -418,8 +489,6 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
 # install_host_packages() and install_host_packages_UbuntuServer().
 #
 function set_zfs_ppa_requirement {
-  print_step_info_header
-
   apt update
 
   local zfs_package_version
@@ -442,25 +511,19 @@ function set_zfs_ppa_requirement_Debian {
 # to it being incorrectly setup).
 #
 function set_zfs_ppa_requirement_Linuxmint {
-  print_step_info_header
-
   perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
 
-  set_zfs_ppa_requirement
+  invoke "set_zfs_ppa_requirement"
 }
 
 # By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
 # from the logs.
 #
 function create_passphrase_named_pipe {
-  print_step_info_header
-
   mkfifo "$c_passphrase_named_pipe"
 }
 
 function register_exit_hook {
-  print_step_info_header
-
   function _exit_hook {
     rm -f "$c_passphrase_named_pipe"
 
@@ -508,10 +571,14 @@ export ZFS_FREE_TAIL_SPACE=12
   trap _exit_hook EXIT
 }
 
-function select_disks {
-  print_step_info_header
+# Whiptail's lack of multiline editing is quite painful.
+#
+function install_dialog_package {
+  apt install -y dialog
+}
 
-  if [[ "${ZFS_SELECTED_DISKS:-}" != "" ]]; then
+function select_disks {
+  if [[ -n ${ZFS_SELECTED_DISKS:-} ]]; then
     mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
   else
     while true; do
@@ -550,8 +617,6 @@ Devices with mounted partitions, cdroms, and removable devices are not displayed
 }
 
 function select_pools_raid_type {
-  print_step_info_header
-
   local raw_pools_raid_type=
 
   if [[ -v ZFS_POOLS_RAID_TYPE ]]; then
@@ -595,16 +660,14 @@ function select_pools_raid_type {
 }
 
 function ask_root_password_Debian {
-  print_step_info_header
-
   set +x
-  if [[ ${ZFS_DEBIAN_ROOT_PASSWORD:-} != "" ]]; then
+  if [[ -n ${ZFS_DEBIAN_ROOT_PASSWORD:-} ]]; then
     v_root_password="$ZFS_DEBIAN_ROOT_PASSWORD"
   else
     local password_invalid_message=
     local password_repeat=-
 
-    while [[ "$v_root_password" != "$password_repeat" || "$v_root_password" == "" ]]; do
+    while [[ $v_root_password != "$password_repeat" || -z $v_root_password ]]; do
       v_root_password=$(whiptail --passwordbox "${password_invalid_message}Please enter the root account password (can't be empty):" 30 100 3>&1 1>&2 2>&3)
       password_repeat=$(whiptail --passwordbox "Please repeat the password:" 30 100 3>&1 1>&2 2>&3)
 
@@ -615,8 +678,6 @@ function ask_root_password_Debian {
 }
 
 function ask_encryption {
-  print_step_info_header
-
   set +x
 
   if [[ -v ZFS_PASSPHRASE ]]; then
@@ -647,9 +708,7 @@ Leave blank to keep encryption disabled.
 }
 
 function ask_boot_partition_size {
-  print_step_info_header
-
-  if [[ ${ZFS_BOOT_PARTITION_SIZE:-} != "" ]]; then
+  if [[ -n ${ZFS_BOOT_PARTITION_SIZE:-} ]]; then
     v_boot_partition_size=$ZFS_BOOT_PARTITION_SIZE
   else
    local boot_partition_size_invalid_message=
@@ -667,9 +726,7 @@ Supported formats: '512M', '3G'" 30 100 ${c_default_boot_partition_size}M 3>&1 1
 }
 
 function ask_swap_size {
-  print_step_info_header
-
-  if [[ ${ZFS_SWAP_SIZE:-} != "" ]]; then
+  if [[ -n ${ZFS_SWAP_SIZE:-} ]]; then
     v_swap_size=$ZFS_SWAP_SIZE
   else
    local swap_size_invalid_message=
@@ -685,9 +742,7 @@ function ask_swap_size {
 }
 
 function ask_free_tail_space {
-  print_step_info_header
-
-  if [[ ${ZFS_FREE_TAIL_SPACE:-} != "" ]]; then
+  if [[ -n ${ZFS_FREE_TAIL_SPACE:-} ]]; then
     v_free_tail_space=$ZFS_FREE_TAIL_SPACE
   else
     local tail_space_invalid_message=
@@ -711,9 +766,7 @@ For detailed informations, see the wiki page: https://github.com/saveriomiroddi/
 }
 
 function ask_rpool_name {
-  print_step_info_header
-
-  if [[ ${ZFS_RPOOL_NAME:-} != "" ]]; then
+  if [[ -n ${ZFS_RPOOL_NAME:-} ]]; then
     v_rpool_name=$ZFS_RPOOL_NAME
   else
     local rpool_name_invalid_message=
@@ -729,8 +782,6 @@ function ask_rpool_name {
 }
 
 function ask_pool_create_options {
-  print_step_info_header
-
   local bpool_create_options_message='Insert the create options for the boot pool
 
 The mount-related options are automatically added, and must not be specified.'
@@ -750,9 +801,30 @@ The encryption/mount-related options are automatically added, and must not be sp
   print_variables v_bpool_create_options v_rpool_create_options
 }
 
-function install_host_packages {
-  print_step_info_header
+function ask_dataset_create_options {
+  if [[ -n ${ZFS_DATASET_CREATE_OPTIONS:-} ]]; then
+    v_dataset_create_options=$ZFS_DATASET_CREATE_OPTIONS
+  else
+    while true; do
+      local tempfile
+      tempfile=$(mktemp)
 
+      echo "$c_dataset_options_help$c_default_dataset_create_options" > "$tempfile"
+
+      local user_value
+      user_value=$(dialog --editbox "$tempfile" 30 120 3>&1 1>&2 2>&3)
+
+      if [[ -n $user_value && $user_value != *\"* ]]; then
+        v_dataset_create_options=$(echo "$user_value" | perl -ne 'print unless /^\s*#/')
+        break
+      fi
+    done
+  fi
+
+  print_variables v_dataset_create_options
+}
+
+function install_host_packages {
   if [[ $v_use_ppa == "1" ]]; then
     if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
       add-apt-repository --yes "$c_ppa"
@@ -777,8 +849,6 @@ function install_host_packages {
 }
 
 function install_host_packages_Debian {
-  print_step_info_header
-
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
@@ -799,27 +869,21 @@ function install_host_packages_Debian {
 # Differently from Ubuntu, Mint doesn't have the package installed in the live version.
 #
 function install_host_packages_Linuxmint {
-  print_step_info_header
-
   apt install --yes zfsutils-linux
 
-  install_host_packages
+  invoke "install_host_packages"
 }
 
 function install_host_packages_elementary {
-  print_step_info_header
-
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     apt update
     apt install --yes software-properties-common
   fi
 
-  install_host_packages
+  invoke "install_host_packages"
 }
 
 function install_host_packages_UbuntuServer {
-  print_step_info_header
-
   if [[ $v_use_ppa != "1" ]]; then
     apt install --yes zfsutils-linux efibootmgr
 
@@ -851,8 +915,6 @@ function install_host_packages_UbuntuServer {
 }
 
 function setup_partitions {
-  print_step_info_header
-
   local required_tail_space=$((v_free_tail_space > c_temporary_volume_size ? v_free_tail_space : c_temporary_volume_size))
 
   for selected_disk in "${v_selected_disks[@]}"; do
@@ -908,8 +970,6 @@ function setup_partitions {
 }
 
 function install_operating_system {
-  print_step_info_header
-
   local dialog_message='The Ubuntu GUI installer will now be launched.
 
 Proceed with the configuration as usual, then, at the partitioning stage:
@@ -923,7 +983,7 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 - at the end, choose `Continue Testing`
 '
 
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+  if [[ -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
     whiptail --msgbox "$dialog_message" 30 100
   fi
 
@@ -943,16 +1003,14 @@ Proceed with the configuration as usual, then, at the partitioning stage:
   #
   # Note that we assume that the user created only one partition on the temp volume, as expected.
   #
-  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
-    mount "$v_temp_volume_device" "$c_installed_os_data_mount_dir"
+  if ! mountpoint -q "$c_installed_os_mount_dir"; then
+    mount "$v_temp_volume_device" "$c_installed_os_mount_dir"
   fi
 
-  rm -f "$c_installed_os_data_mount_dir/swapfile"
+  rm -f "$c_installed_os_mount_dir/swapfile"
 }
 
 function install_operating_system_Debian {
-  print_step_info_header
-
   # The temporary volume size displayed is an approximation of the format used by the installer,
   # but it's acceptable - the complexity required is not worth (eg. converting hypothetical units,
   # etc.).
@@ -970,7 +1028,7 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 - at the end, uncheck `Restart now`, and click `Done`
 '
 
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+  if [[ -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
     whiptail --msgbox "$dialog_message" 30 100
   fi
 
@@ -980,24 +1038,24 @@ Proceed with the configuration as usual, then, at the partitioning stage:
 
   DISPLAY=:0 calamares
 
-  mkdir -p "$c_installed_os_data_mount_dir"
+  mkdir -p "$c_installed_os_mount_dir"
 
   # Note how in Debian, for reasons currenly unclear, the mount fails if the partition is passed;
   # it requires the device to be passed.
   #
-  mount "${v_temp_volume_device}" "$c_installed_os_data_mount_dir"
+  mount "${v_temp_volume_device}" "$c_installed_os_mount_dir"
 
   # We don't use chroot()_execute here, as it works on $c_zfs_mount_dir (which is synced on a
   # later stage).
   #
   set +x
-  chroot "$c_installed_os_data_mount_dir" bash -c "echo root:$(printf "%q" "$v_root_password") | chpasswd"
+  chroot "$c_installed_os_mount_dir" bash -c "echo root:$(printf "%q" "$v_root_password") | chpasswd"
   set -x
 
   # The installer doesn't set the network interfaces, so, for convenience, we do it.
   #
   for interface in $(ip addr show | perl -lne '/^\d+: (?!lo:)(\w+)/ && print $1' ); do
-    cat > "$c_installed_os_data_mount_dir/etc/network/interfaces.d/$interface" <<CONF
+    cat > "$c_installed_os_mount_dir/etc/network/interfaces.d/$interface" <<CONF
   auto $interface
   iface $interface inet dhcp
 CONF
@@ -1005,8 +1063,6 @@ CONF
 }
 
 function install_operating_system_UbuntuServer {
-  print_step_info_header
-
   # O/S Installation
   #
   # Subiquity is designed to prevent the user from opening a terminal, which is (to say the least)
@@ -1040,20 +1096,18 @@ You can switch anytime to this terminal, and back, in order to read the instruct
   # See note in install_operating_system(). It's not clear whether this is required on Ubuntu
   # Server, but it's better not to take risks.
   #
-  if ! mountpoint -q "$c_installed_os_data_mount_dir"; then
-    mount "${v_temp_volume_device}p2" "$c_installed_os_data_mount_dir"
+  if ! mountpoint -q "$c_installed_os_mount_dir"; then
+    mount "${v_temp_volume_device}p2" "$c_installed_os_mount_dir"
   fi
 
-  rm -f "$c_installed_os_data_mount_dir"/swap.img
+  rm -f "$c_installed_os_mount_dir"/swap.img
 }
 
 function custom_install_operating_system {
-  print_step_info_header
-
   sudo "$ZFS_OS_INSTALLATION_SCRIPT"
 }
 
-function create_pools {
+function create_pools_and_datasets {
   # POOL OPTIONS #######################
 
   local encryption_options=()
@@ -1062,7 +1116,7 @@ function create_pools {
 
   set +x
   if [[ -n $v_passphrase ]]; then
-    encryption_options=(-O "encryption=on" -O "keylocation=prompt" -O "keyformat=passphrase")
+    encryption_options=(-O "encryption=aes-256-gcm" -O "keylocation=prompt" -O "keyformat=passphrase")
   fi
   set -x
 
@@ -1071,9 +1125,10 @@ function create_pools {
     bpool_disks_partitions+=("${selected_disk}-part2")
   done
 
-  # POOLS CREATION #####################
+  # ROOT POOL CREATION #################
 
-  # The root pool must be created first, since the boot pool mountpoint is inside it.
+  # In this script, the boot pool doesn't have a root dataset; since its creation will mount /boot,
+  # it needs to be done after the root pool root dataset is created.
 
   set +x
   echo -n "$v_passphrase" > "$c_passphrase_named_pipe" &
@@ -1088,9 +1143,41 @@ function create_pools {
   zpool create \
     "${encryption_options[@]}" \
     "${v_rpool_create_options[@]}" \
-    -O mountpoint=/ -R "$c_zfs_mount_dir" -f \
+    -O mountpoint=/ -O canmount=off -R "$c_zfs_mount_dir" -f \
     "$v_rpool_name" "${v_pools_raid_type[@]}" "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
+
+  # DATASETS CREATION ##################
+
+  local interpolated_dataset_create_options
+  interpolated_dataset_create_options=$(eval echo \""$v_dataset_create_options"\")
+
+  echo "Interpolated dataset create options:"
+  echo "$interpolated_dataset_create_options"
+  echo
+
+  while read -r dataset_metadata_line || [[ -n $dataset_metadata_line ]]; do
+    if [[ $dataset_metadata_line =~ [^[:space:]] ]]; then
+      local dataset_metadata_entries
+      # shellcheck disable=2206 # cheating for simplicity (alternative: sed and mapfile).
+      dataset_metadata_entries=($dataset_metadata_line)
+
+      local dataset=$v_rpool_name/${dataset_metadata_entries[0]}
+      local options=("${dataset_metadata_entries[@]:1}")
+
+      # Prepend the `-o`.
+      #
+      # shellcheck disable=2068 # cheating for simplicity (otherwise each `-o $option` will be a single
+      # string).
+      zfs create ${options[@]/#/-o } "$dataset"
+    fi
+  done < <(echo "$interpolated_dataset_create_options")
+
+  chmod 700 /mnt/root
+  # This is fine independently of the user creating a dataset for /tmp or not.
+  chmod 1777 /mnt/tmp
+
+  # BOOT POOL CREATION #################
 
   zpool create \
     -o cachefile=/etc/zfs/zpool.cache \
@@ -1100,8 +1187,6 @@ function create_pools {
 }
 
 function create_swap_volume {
-  print_step_info_header
-
   if [[ $v_swap_size -gt 0 ]]; then
     zfs create \
       -V "${v_swap_size}G" -b "$(getconf PAGESIZE)" \
@@ -1113,19 +1198,15 @@ function create_swap_volume {
 }
 
 function copy_zpool_cache {
-  print_step_info_header
-
   mkdir -p "$c_zfs_mount_dir/etc/zfs"
   cp /etc/zfs/zpool.cache "$c_zfs_mount_dir/etc/zfs/"
 }
 
 function sync_os_temp_installation_dir_to_rpool {
-  print_step_info_header
-
   # On Ubuntu Server, `/boot/efi` and `/cdrom` (!!!) are mounted, but they're not needed.
   #
   local mount_dir_submounts
-  mount_dir_submounts=$(mount | MOUNT_DIR="${c_installed_os_data_mount_dir%/}" perl -lane 'print $F[2] if $F[2] =~ /$ENV{MOUNT_DIR}\//')
+  mount_dir_submounts=$(mount | MOUNT_DIR="${c_installed_os_mount_dir%/}" perl -lane 'print $F[2] if $F[2] =~ /$ENV{MOUNT_DIR}\//')
 
   for mount_dir in $mount_dir_submounts; do
     umount "$mount_dir"
@@ -1138,7 +1219,7 @@ function sync_os_temp_installation_dir_to_rpool {
   # `/run` is not needed (with an exception), and in Ubuntu Server it's actually a nuisance, since
   # some files vanish while syncing. Debian is well-behaved, and `/run` is empty.
   #
-  rsync -avX --exclude=/run --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_data_mount_dir/" "$c_zfs_mount_dir" |
+  rsync -avX --exclude=/run --info=progress2 --no-inc-recursive --human-readable "$c_installed_os_mount_dir/" "$c_zfs_mount_dir" |
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
@@ -1146,16 +1227,14 @@ function sync_os_temp_installation_dir_to_rpool {
 
   # Required destination of symlink `/etc/resolv.conf`, present in Ubuntu systems (not Debian).
   #
-  if [[ -d $c_installed_os_data_mount_dir/run/systemd/resolve ]]; then
-    rsync -av --relative "$c_installed_os_data_mount_dir/run/./systemd/resolve" "$c_zfs_mount_dir/run"
+  if [[ -d $c_installed_os_mount_dir/run/systemd/resolve ]]; then
+    rsync -av --relative "$c_installed_os_mount_dir/run/./systemd/resolve" "$c_zfs_mount_dir/run"
   fi
 
-  umount "$c_installed_os_data_mount_dir"
+  umount "$c_installed_os_mount_dir"
 }
 
 function remove_temp_partition_and_expand_rpool {
-  print_step_info_header
-
   if (( v_free_tail_space < c_temporary_volume_size )); then
     if [[ $v_free_tail_space -eq 0 ]]; then
       local resize_reference=100%
@@ -1190,8 +1269,6 @@ function remove_temp_partition_and_expand_rpool {
 }
 
 function prepare_jail {
-  print_step_info_header
-
   for virtual_fs_dir in proc sys dev; do
     mount --rbind "/$virtual_fs_dir" "$c_zfs_mount_dir/$virtual_fs_dir"
   done
@@ -1202,8 +1279,6 @@ function prepare_jail {
 # See install_host_packages() for some comments.
 #
 function install_jail_zfs_packages {
-  print_step_info_header
-
   if [[ $v_use_ppa == "1" ]]; then
     chroot_execute "add-apt-repository --yes $c_ppa"
 
@@ -1228,8 +1303,6 @@ function install_jail_zfs_packages {
 }
 
 function install_jail_zfs_packages_Debian {
-  print_step_info_header
-
   chroot_execute 'echo "deb http://deb.debian.org/debian buster main contrib"     >> /etc/apt/sources.list'
   chroot_execute 'echo "deb-src http://deb.debian.org/debian buster main contrib" >> /etc/apt/sources.list'
 
@@ -1249,26 +1322,20 @@ APT'
 }
 
 function install_jail_zfs_packages_elementary {
-  print_step_info_header
-
   chroot_execute "apt install --yes software-properties-common"
 
-  install_jail_zfs_packages
+  invoke "install_jail_zfs_packages"
 }
 
 function install_jail_zfs_packages_UbuntuServer {
-  print_step_info_header
-
   if [[ $v_use_ppa != "1" ]]; then
     chroot_execute "apt install --yes zfsutils-linux zfs-initramfs grub-efi-amd64-signed shim-signed"
   else
-    install_jail_zfs_packages
+    invoke "install_jail_zfs_packages"
   fi
 }
 
 function prepare_efi_partition {
-  print_step_info_header
-
   # The other mounts are configured/synced in the EFI partitions sync stage.
   #
   chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[0]}"-part1) /boot/efi vfat defaults 0 0 > /etc/fstab"
@@ -1280,8 +1347,6 @@ function prepare_efi_partition {
 }
 
 function configure_and_update_grub {
-  print_step_info_header
-
   chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'        /etc/default/grub"
 
   # Silence warning during the grub probe (source: https://git.io/JenXF).
@@ -1307,20 +1372,7 @@ function configure_and_update_grub {
   chroot_execute "update-grub"
 }
 
-function configure_and_update_grub_Debian {
-  print_step_info_header
-
-  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'     /etc/default/grub"
-
-  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=.*\Kquiet//'                /etc/default/grub"
-  chroot_execute "perl -i -pe 's/#(GRUB_TERMINAL=console)/\$1/'                         /etc/default/grub"
-
-  chroot_execute "update-grub"
-}
-
 function sync_efi_partitions {
-  print_step_info_header
-
   for ((i = 1; i < ${#v_selected_disks[@]}; i++)); do
     local synced_efi_partition_path="/boot/efi$((i + 1))"
 
@@ -1343,14 +1395,10 @@ function sync_efi_partitions {
 # See issue https://github.com/saveriomiroddi/zfs-installer/issues/110.
 #
 function update_initramfs {
-  print_step_info_header
-
   chroot_execute "update-initramfs -u"
 }
 
 function fix_filesystem_mount_ordering {
-  print_step_info_header
-
   chroot_execute "mkdir /etc/zfs/zfs-list.cache"
   chroot_execute "touch /etc/zfs/zfs-list.cache/$c_bpool_name /etc/zfs/zfs-list.cache/$v_rpool_name"
 
@@ -1375,7 +1423,7 @@ function fix_filesystem_mount_ordering {
     # For the rpool only, it takes around half second on a test VM.
     #
     chroot_execute "zfs set canmount=on $c_bpool_name"
-    chroot_execute "zfs set canmount=on $v_rpool_name"
+    chroot_execute "zfs set canmount=on $v_rpool_name/ROOT"
 
     SECONDS=0
 
@@ -1401,55 +1449,12 @@ function fix_filesystem_mount_ordering {
   chroot_execute "sed -Ei 's|$c_zfs_mount_dir/?|/|' /etc/zfs/zfs-list.cache/*"
 }
 
-# We don't care about synchronizing with the `fstrim` service for two reasons:
-#
-# - we assume that there are no other (significantly) large filesystems;
-# - trimming is fast (takes minutes on a 1 TB disk).
-#
-# The code is a straight copy of the `fstrim` service.
-#
-function configure_pools_trimming {
-  print_step_info_header
-
-  chroot_execute "cat > /lib/systemd/system/zfs-trim.service << UNIT
-[Unit]
-Description=Discard unused ZFS blocks
-ConditionVirtualization=!container
-
-[Service]
-Type=oneshot
-ExecStart=/sbin/zpool trim $c_bpool_name
-ExecStart=/sbin/zpool trim $v_rpool_name
-UNIT"
-
-  chroot_execute "  cat > /lib/systemd/system/zfs-trim.timer << TIMER
-[Unit]
-Description=Discard unused ZFS blocks once a week
-ConditionVirtualization=!container
-
-[Timer]
-OnCalendar=weekly
-AccuracySec=1h
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-TIMER"
-
-  chroot_execute "systemctl daemon-reload"
-  chroot_execute "systemctl enable zfs-trim.timer"
-}
-
 function configure_remaining_settings {
-  print_step_info_header
-
   [[ $v_swap_size -gt 0 ]] && chroot_execute "echo /dev/zvol/$v_rpool_name/swap none swap discard 0 0 >> /etc/fstab" || true
   chroot_execute "echo RESUME=none > /etc/initramfs-tools/conf.d/resume"
 }
 
 function prepare_for_system_exit {
-  print_step_info_header
-
   for virtual_fs_dir in dev sys proc; do
     umount --recursive --force --lazy "$c_zfs_mount_dir/$virtual_fs_dir"
   done
@@ -1482,13 +1487,11 @@ function prepare_for_system_exit {
 }
 
 function display_exit_banner {
-  print_step_info_header
-
   local dialog_message="The system has been successfully prepared and installed.
 
 You now need to perform a hard reset, then enjoy your ZFS system :-)"
 
-  if [[ ${ZFS_NO_INFO_MESSAGES:-} == "" ]]; then
+  if [[ -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
     whiptail --msgbox "$dialog_message" 30 100
   fi
 }
@@ -1499,58 +1502,60 @@ if [[ $# -ne 0 ]]; then
   display_help_and_exit
 fi
 
-activate_debug
-set_distribution_data
-distro_dependent_invoke "store_os_distro_information"
-store_running_processes
-check_prerequisites
-display_intro_banner
-check_system_memory
-find_suitable_disks
-distro_dependent_invoke "set_zfs_ppa_requirement"
-register_exit_hook
-create_passphrase_named_pipe
+invoke "activate_debug"
+invoke "set_distribution_data"
+invoke "store_os_distro_information"
+invoke "store_running_processes"
+invoke "check_prerequisites"
+invoke "display_intro_banner"
+invoke "check_system_memory"
+invoke "save_disks_log"
+invoke "find_suitable_disks"
+invoke "set_zfs_ppa_requirement"
+invoke "register_exit_hook"
+invoke "create_passphrase_named_pipe"
+invoke "install_dialog_package"
 
-select_disks
-select_pools_raid_type
-distro_dependent_invoke "ask_root_password" --noforce
-ask_encryption
-ask_boot_partition_size
-ask_swap_size
-ask_free_tail_space
-ask_rpool_name
-ask_pool_create_options
+invoke "select_disks"
+invoke "select_pools_raid_type"
+invoke "ask_root_password" --optional
+invoke "ask_encryption"
+invoke "ask_boot_partition_size"
+invoke "ask_swap_size"
+invoke "ask_free_tail_space"
+invoke "ask_rpool_name"
+invoke "ask_pool_create_options"
+invoke "ask_dataset_create_options"
 
-distro_dependent_invoke "install_host_packages"
-setup_partitions
+invoke "install_host_packages"
+invoke "setup_partitions"
 
-if [[ "${ZFS_OS_INSTALLATION_SCRIPT:-}" == "" ]]; then
+if [[ -z ${ZFS_OS_INSTALLATION_SCRIPT:-} ]]; then
   # Includes the O/S extra configuration, if necessary (network, root pwd, etc.)
-  distro_dependent_invoke "install_operating_system"
+  invoke "install_operating_system"
 
-  create_pools
-  create_swap_volume
-  copy_zpool_cache
-  sync_os_temp_installation_dir_to_rpool
-  remove_temp_partition_and_expand_rpool
+  invoke "create_pools_and_datasets"
+  invoke "create_swap_volume"
+  invoke "copy_zpool_cache"
+  invoke "sync_os_temp_installation_dir_to_rpool"
+  invoke "remove_temp_partition_and_expand_rpool"
 else
-  create_pools
-  create_swap_volume
-  copy_zpool_cache
-  remove_temp_partition_and_expand_rpool
+  invoke "create_pools_and_datasets"
+  invoke "create_swap_volume"
+  invoke "copy_zpool_cache"
+  invoke "remove_temp_partition_and_expand_rpool"
 
-  custom_install_operating_system
+  invoke "custom_install_operating_system"
 fi
 
-prepare_jail
-distro_dependent_invoke "install_jail_zfs_packages"
-prepare_efi_partition
-distro_dependent_invoke "configure_and_update_grub"
-sync_efi_partitions
-update_initramfs
-fix_filesystem_mount_ordering
-configure_pools_trimming
-configure_remaining_settings
+invoke "prepare_jail"
+invoke "install_jail_zfs_packages"
+invoke "prepare_efi_partition"
+invoke "configure_and_update_grub"
+invoke "sync_efi_partitions"
+invoke "update_initramfs"
+invoke "fix_filesystem_mount_ordering"
+invoke "configure_remaining_settings"
 
-prepare_for_system_exit
-display_exit_banner
+invoke "prepare_for_system_exit"
+invoke "display_exit_banner"

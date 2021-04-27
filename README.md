@@ -2,7 +2,7 @@
 
 # zfs-installer
 
-ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
+ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Ubuntu-based operating systems using their standard installer (or debootstrap, or any custom script).
 
 - [Requirements and functionality](#requirements-and-functionality)
 - [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
@@ -22,16 +22,15 @@ The program currently supports:
 - Ubuntu Desktop 18.04.x/20.04 Live
 - Ubuntu Server 18.04.x/20.04 Live
 - Linux Mint 19.x, 20
-- Debian 10.x Live (desktop environment required)
 - ElementaryOS 5.1
 
-The ZFS version installed is 0.8, which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
+The ZFS version installed is 0.8 (optionally, 2.x), which supports native encryption and trimming (among the other improvements over 0.7). The required repositories are automatically added to the destination system.
 
 EFI boot is required (any modern (2011+) system will do); legacy boot is currently not supported.
 
 All the ZFS RAID types are supported, with any arbitrary number of disks. An EFI partition is created on each disk, for redundancy purposes.
 
-It's fairly easy to extend the program to support other Debian-based operating systems (e.g. older/newer Ubuntu's, etc.) - the project is (very) open to feature requests.
+It's fairly easy to extend the program to support other Ubuntu-based operating systems - the project is open to feature requests.
 
 ## Comparison with Ubuntu built-in installer
 
@@ -39,19 +38,13 @@ As of 20.04, Canonical makes available an experimental ZFS installer on Ubuntu D
 
 The advantages of this project over the Ubuntu installer are:
 
-1. it supports pools configuration;
-1. it allows specifying the RAID type;
-1. it allows customization of the disk partitions;
-1. it supports additional features (e.g. encryption);
-1. it supports new OpenZFS versions, via PPA `jonathonf/zfs`.
+1. it allows configuring pools, datasets and the RAID type;
+1. it allows customizing the disk partitions;
+1. it supports additional features (e.g. encryption and trimming);
+1. it supports newer OpenZFS versions, via PPA `jonathonf/zfs`.
 1. it supports many more operating systems;
 1. it supports unattended installations, via custom scripts;
-1. it installs a convenient trimming job for ZFS pools;
 1. it's easy to extend.
-
-The disadvantages are:
-
-1. the Ubuntu installer has a more sophisticated filesystem layout - it separates base directories into different ZFS filesystems (this is planned to be implemented in the ZFS installer as well).
 
 ## Instructions
 

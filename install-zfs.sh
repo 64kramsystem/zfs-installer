@@ -531,6 +531,19 @@ export ZFS_FREE_TAIL_SPACE=12
   trap _exit_hook EXIT
 }
 
+function update_apt_index {
+  apt update
+}
+
+# Mint 20 has the CDROM repository enabled, but apt fails when updating due to it (or possibly due
+# to it being incorrectly setup).
+#
+function update_apt_index_Linuxmint {
+  perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
+
+  invoke "update_apt_index"
+}
+
 # REQUIREMENT: it must be ensured that, for any distro, `apt update` is invoked at this step, as
 # subsequent steps rely on it.
 #
@@ -544,8 +557,6 @@ export ZFS_FREE_TAIL_SPACE=12
 # install_host_packages() and install_host_packages_UbuntuServer().
 #
 function set_zfs_ppa_requirement {
-  apt update
-
   local zfs_package_version
   zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print /^Version: (\d+\.\d+)/')
 
@@ -558,17 +569,7 @@ function set_zfs_ppa_requirement {
 
 function set_zfs_ppa_requirement_Debian {
   # Only update apt; in this case, ZFS packages are handled in a specific way.
-
-  apt update
-}
-
-# Mint 20 has the CDROM repository enabled, but apt fails when updating due to it (or possibly due
-# to it being incorrectly setup).
-#
-function set_zfs_ppa_requirement_Linuxmint {
-  perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
-
-  invoke "set_zfs_ppa_requirement"
+  :
 }
 
 # Whiptail's lack of multiline editing is quite painful.
@@ -1513,6 +1514,7 @@ invoke "save_disks_log"
 invoke "find_suitable_disks"
 invoke "register_exit_hook"
 invoke "create_passphrase_named_pipe"
+invoke "update_apt_index"
 invoke "set_zfs_ppa_requirement"
 invoke "install_dialog_package"
 

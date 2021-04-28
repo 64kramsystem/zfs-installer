@@ -514,6 +514,16 @@ function set_use_zfs_ppa_Debian {
   :
 }
 
+# Whiptail's lack of multiline editing is quite painful.
+#
+function install_host_base_packages {
+  # `efibootmgr` needs installation on all the systems.
+  # the other packages are each required by different distros, so for simplicity, they're all packed
+  # together.
+  #
+  apt install -y efibootmgr dialog software-properties-common
+}
+
 function select_disks {
   if [[ -n ${ZFS_SELECTED_DISKS:-} ]]; then
     mapfile -d, -t v_selected_disks < <(echo -n "$ZFS_SELECTED_DISKS")
@@ -738,7 +748,7 @@ The encryption/mount-related options are automatically added, and must not be sp
   print_variables v_bpool_create_options v_rpool_create_options
 }
 
-function install_host_packages {
+function install_host_zfs_packages {
   if [[ $v_use_ppa == "1" ]]; then
     if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
       add-apt-repository --yes "$c_ppa"
@@ -757,12 +767,14 @@ function install_host_packages {
     fi
   fi
 
-  apt install --yes efibootmgr
+  # Required only by some distros.
+  #
+  apt install --yes zfsutils-linux
 
   zfs --version > "$c_zfs_module_version_log" 2>&1
 }
 
-function install_host_packages_Debian {
+function install_host_zfs_packages_Debian {
   if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
     echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections
 
@@ -775,29 +787,10 @@ function install_host_packages_Debian {
     modprobe zfs
   fi
 
-  apt install --yes efibootmgr
-
   zfs --version > "$c_zfs_module_version_log" 2>&1
 }
 
-# Differently from Ubuntu, Mint doesn't have the package installed in the live version.
-#
-function install_host_packages_Linuxmint {
-  apt install --yes zfsutils-linux
-
-  invoke "install_host_packages"
-}
-
-function install_host_packages_elementary {
-  if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
-    apt update
-    apt install --yes software-properties-common
-  fi
-
-  invoke "install_host_packages"
-}
-
-function install_host_packages_UbuntuServer {
+function install_host_zfs_packages_UbuntuServer {
   if [[ $v_use_ppa != "1" ]]; then
     apt install --yes zfsutils-linux efibootmgr
 
@@ -822,7 +815,7 @@ function install_host_packages_UbuntuServer {
     apt update
     apt install --yes "linux-headers-$(uname -r)"
 
-    install_host_packages
+    install_host_zfs_packages
   else
     apt install --yes efibootmgr
   fi
@@ -1155,7 +1148,13 @@ function prepare_jail {
   chroot_execute 'echo "nameserver 8.8.8.8" >> /etc/resolv.conf'
 }
 
-# See install_host_packages() for some comments.
+# Same principle as install_host_base_packages().
+#
+function install_jail_base_packages {
+  chroot_execute "apt install --yes rsync grub-efi-amd64-signed shim-signed software-properties-common"
+}
+
+# See install_host_zfs_packages() for some comments.
 #
 function install_jail_zfs_packages {
   if [[ $v_use_ppa == "1" ]]; then
@@ -1177,8 +1176,6 @@ function install_jail_zfs_packages {
     #
     chroot_execute "apt install --yes libzfs2linux zfs-initramfs zfs-zed zfsutils-linux"
   fi
-
-  chroot_execute "apt install --yes grub-efi-amd64-signed shim-signed"
 }
 
 function install_jail_zfs_packages_Debian {
@@ -1197,18 +1194,12 @@ APT'
   chroot_execute "apt update"
 
   chroot_execute 'echo "zfs-dkms zfs-dkms/note-incompatible-licenses note true" | debconf-set-selections'
-  chroot_execute "apt install --yes rsync zfs-initramfs zfs-dkms grub-efi-amd64-signed shim-signed"
-}
-
-function install_jail_zfs_packages_elementary {
-  chroot_execute "apt install --yes software-properties-common"
-
-  invoke "install_jail_zfs_packages"
+  chroot_execute "apt install --yes zfs-initramfs zfs-dkms"
 }
 
 function install_jail_zfs_packages_UbuntuServer {
   if [[ $v_use_ppa != "1" ]]; then
-    chroot_execute "apt install --yes zfsutils-linux zfs-initramfs grub-efi-amd64-signed shim-signed"
+    chroot_execute "apt install --yes zfsutils-linux zfs-initramfs"
   else
     invoke "install_jail_zfs_packages"
   fi
@@ -1414,6 +1405,7 @@ invoke "create_passphrase_named_pipe"
 invoke "prepare_standard_repositories"
 invoke "update_apt_index"
 invoke "set_use_zfs_ppa"
+invoke "install_host_base_packages"
 
 invoke "select_disks"
 invoke "select_pools_raid_type"
@@ -1425,7 +1417,7 @@ invoke "ask_free_tail_space"
 invoke "ask_rpool_name"
 invoke "ask_pool_create_options"
 
-invoke "install_host_packages"
+invoke "install_host_zfs_packages"
 invoke "setup_partitions"
 
 if [[ -z ${ZFS_OS_INSTALLATION_SCRIPT:-} ]]; then
@@ -1445,6 +1437,7 @@ else
 fi
 
 invoke "prepare_jail"
+invoke "install_jail_base_packages"
 invoke "install_jail_zfs_packages"
 invoke "prepare_efi_partition"
 invoke "configure_and_update_grub"

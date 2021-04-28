@@ -558,15 +558,6 @@ function update_apt_index {
   apt update
 }
 
-# There are three parameters:
-#
-# 1. the tools are preinstalled (ie. Ubuntu Desktop based);
-# 2. the default repository supports ZFS 0.8 (ie. Ubuntu 20.04+ based);
-# 3. the distro provides the precompiled ZFS module (i.e. Ubuntu based, not Debian)
-#
-# Fortunately, with Debian-specific logic isolated, we need conditionals based only on #2 - see
-# install_host_packages() and install_host_packages_UbuntuServer().
-#
 function set_use_zfs_ppa {
   local zfs_package_version
   zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print /^Version: (\d+\.\d+)/')

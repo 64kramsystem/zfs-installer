@@ -416,46 +416,6 @@ If you think this is a bug, please open an issue on https://github.com/saveriomi
   print_variables v_suitable_disks
 }
 
-# REQUIREMENT: it must be ensured that, for any distro, `apt update` is invoked at this step, as
-# subsequent steps rely on it.
-#
-# There are three parameters:
-#
-# 1. the tools are preinstalled (ie. Ubuntu Desktop based);
-# 2. the default repository supports ZFS 0.8 (ie. Ubuntu 20.04+ based);
-# 3. the distro provides the precompiled ZFS module (i.e. Ubuntu based, not Debian)
-#
-# Fortunately, with Debian-specific logic isolated, we need conditionals based only on #2 - see
-# install_host_packages() and install_host_packages_UbuntuServer().
-#
-function set_zfs_ppa_requirement {
-  apt update
-
-  local zfs_package_version
-  zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print /^Version: (\d+\.\d+)/')
-
-  # Test returns true if $zfs_package_version is blank.
-  #
-  if [[ ${ZFS_USE_PPA:-} == "1" ]] || dpkg --compare-versions "$zfs_package_version" lt 0.8; then
-    v_use_ppa=1
-  fi
-}
-
-function set_zfs_ppa_requirement_Debian {
-  # Only update apt; in this case, ZFS packages are handled in a specific way.
-
-  apt update
-}
-
-# Mint 20 has the CDROM repository enabled, but apt fails when updating due to it (or possibly due
-# to it being incorrectly setup).
-#
-function set_zfs_ppa_requirement_Linuxmint {
-  perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
-
-  invoke "set_zfs_ppa_requirement"
-}
-
 # By using a FIFO, we avoid having to hide statements like `echo $v_passphrase | zpoool create ...`
 # from the logs.
 #
@@ -509,6 +469,46 @@ export ZFS_FREE_TAIL_SPACE=12
     set -x
   }
   trap _exit_hook EXIT
+}
+
+# REQUIREMENT: it must be ensured that, for any distro, `apt update` is invoked at this step, as
+# subsequent steps rely on it.
+#
+# There are three parameters:
+#
+# 1. the tools are preinstalled (ie. Ubuntu Desktop based);
+# 2. the default repository supports ZFS 0.8 (ie. Ubuntu 20.04+ based);
+# 3. the distro provides the precompiled ZFS module (i.e. Ubuntu based, not Debian)
+#
+# Fortunately, with Debian-specific logic isolated, we need conditionals based only on #2 - see
+# install_host_packages() and install_host_packages_UbuntuServer().
+#
+function set_zfs_ppa_requirement {
+  apt update
+
+  local zfs_package_version
+  zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print /^Version: (\d+\.\d+)/')
+
+  # Test returns true if $zfs_package_version is blank.
+  #
+  if [[ ${ZFS_USE_PPA:-} == "1" ]] || dpkg --compare-versions "$zfs_package_version" lt 0.8; then
+    v_use_ppa=1
+  fi
+}
+
+function set_zfs_ppa_requirement_Debian {
+  # Only update apt; in this case, ZFS packages are handled in a specific way.
+
+  apt update
+}
+
+# Mint 20 has the CDROM repository enabled, but apt fails when updating due to it (or possibly due
+# to it being incorrectly setup).
+#
+function set_zfs_ppa_requirement_Linuxmint {
+  perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
+
+  invoke "set_zfs_ppa_requirement"
 }
 
 function select_disks {
@@ -1406,9 +1406,9 @@ invoke "display_intro_banner"
 invoke "check_system_memory"
 invoke "save_disks_log"
 invoke "find_suitable_disks"
-invoke "set_zfs_ppa_requirement"
 invoke "register_exit_hook"
 invoke "create_passphrase_named_pipe"
+invoke "set_zfs_ppa_requirement"
 
 invoke "select_disks"
 invoke "select_pools_raid_type"

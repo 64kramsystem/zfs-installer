@@ -751,7 +751,7 @@ The encryption/mount-related options are automatically added, and must not be sp
 function install_host_zfs_packages {
   if [[ $v_use_ppa == "1" ]]; then
     if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
-      add-apt-repository --yes "$c_ppa"
+      add-apt-repository --yes --no-update "$c_ppa"
       apt update
 
       # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
@@ -1158,7 +1158,7 @@ function install_jail_base_packages {
 #
 function install_jail_zfs_packages {
   if [[ $v_use_ppa == "1" ]]; then
-    chroot_execute "add-apt-repository --yes $c_ppa"
+    chroot_execute "add-apt-repository --yes --no-update $c_ppa"
 
     chroot_execute "apt update"
 

@@ -531,22 +531,33 @@ export ZFS_FREE_TAIL_SPACE=12
   trap _exit_hook EXIT
 }
 
-function update_apt_index {
-  apt update
+function prepare_standard_repositories {
+  # Make sure it's enabled. Ubuntu MATE has it, while the standard Ubuntu doesn't.
+  # The program exits with success if the repository is already enabled.
+  #
+  add-apt-repository --yes --no-update universe
 }
 
 # Mint 20 has the CDROM repository enabled, but apt fails when updating due to it (or possibly due
 # to it being incorrectly setup).
 #
-function update_apt_index_Linuxmint {
+function prepare_standard_repositories_Linuxmint {
   perl -i -pe 's/^(deb cdrom)/# $1/' /etc/apt/sources.list
 
-  invoke "update_apt_index"
+  # The universe repository may be already enabled, but it's more solid to ensure it.
+  #
+  invoke "prepare_standard_repositories"
 }
 
-# REQUIREMENT: it must be ensured that, for any distro, `apt update` is invoked at this step, as
-# subsequent steps rely on it.
-#
+function prepare_standard_repositories_Debian {
+  # Debian doesn't require universe (for dialog).
+  :
+}
+
+function update_apt_index {
+  apt update
+}
+
 # There are three parameters:
 #
 # 1. the tools are preinstalled (ie. Ubuntu Desktop based);
@@ -1514,6 +1525,7 @@ invoke "save_disks_log"
 invoke "find_suitable_disks"
 invoke "register_exit_hook"
 invoke "create_passphrase_named_pipe"
+invoke "prepare_standard_repositories"
 invoke "update_apt_index"
 invoke "set_zfs_ppa_requirement"
 invoke "install_dialog_package"

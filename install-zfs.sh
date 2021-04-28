@@ -567,7 +567,7 @@ function update_apt_index {
 # Fortunately, with Debian-specific logic isolated, we need conditionals based only on #2 - see
 # install_host_packages() and install_host_packages_UbuntuServer().
 #
-function set_zfs_ppa_requirement {
+function set_use_zfs_ppa {
   local zfs_package_version
   zfs_package_version=$(apt show zfsutils-linux 2> /dev/null | perl -ne 'print /^Version: (\d+\.\d+)/')
 
@@ -578,7 +578,7 @@ function set_zfs_ppa_requirement {
   fi
 }
 
-function set_zfs_ppa_requirement_Debian {
+function set_use_zfs_ppa_Debian {
   # Only update apt; in this case, ZFS packages are handled in a specific way.
   :
 }
@@ -1527,7 +1527,7 @@ invoke "register_exit_hook"
 invoke "create_passphrase_named_pipe"
 invoke "prepare_standard_repositories"
 invoke "update_apt_index"
-invoke "set_zfs_ppa_requirement"
+invoke "set_use_zfs_ppa"
 invoke "install_dialog_package"
 
 invoke "select_disks"

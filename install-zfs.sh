@@ -89,6 +89,7 @@ c_dataset_options_help='# The defaults create a root pool similar to the Ubuntu 
 # Parameters and command substitutions are applied; useful variables are $c_zfs_mount_dir and $v_rpool_name.
 '
 # Can't include double quotes, due to the templating logic.
+# KUbuntu has a /home/.directory, which must not be a separate dataset (it's a symlink).
 #
 c_default_dataset_create_options='
 ROOT                           mountpoint=/ com.ubuntu.zsys:bootfs=yes com.ubuntu.zsys:last-used=$(date +%s)
@@ -112,7 +113,7 @@ ROOT/tmp                       com.ubuntu.zsys:bootfs=no
 USERDATA                       mountpoint=/ canmount=off
 USERDATA/root                  mountpoint=/root canmount=on com.ubuntu.zsys:bootfs-datasets=$v_rpool_name/ROOT
 
-$(find $c_installed_os_mount_dir/home -mindepth 1 -maxdepth 1 -printf '\''
+$(find $c_installed_os_mount_dir/home -mindepth 1 -maxdepth 1 -not -name '\''.*'\'' -printf '\''
 USERDATA/%P                    mountpoint=/home/%P canmount=on com.ubuntu.zsys:bootfs-datasets=$v_rpool_name/%P
 '\'')
 '

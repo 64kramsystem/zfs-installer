@@ -247,6 +247,33 @@ function print_variables {
   echo
 }
 
+# Very annoyingly, some distros (e.g. Linux Mint) have a "reduced" version of add-apt-repository
+#
+function checked_add_apt_repository {
+  local repository=$1
+  local option=${2:-} # optional: `--chroot`
+
+  local add_repo_command=(add-apt-repository --yes "$repository")
+
+  if add-apt-repository --help | grep -q "\--no-update"; then
+    # Assume that when this option isn't available, no update is performed. The fragmentation is a PITA.
+    #
+    add_repo_command+=(--no-update)
+  fi
+
+  case $option in
+  '')
+    "${add_repo_command[@]}"
+    ;;
+  --chroot)
+    chroot_execute "${add_repo_command[*]}"
+    ;;
+  *)
+    >&2 echo "Unexpected checked_add_apt_repository option: $2"
+    exit 1
+  esac
+}
+
 function chroot_execute {
   chroot $c_zfs_mount_dir bash -c "$1"
 }
@@ -539,7 +566,7 @@ function prepare_standard_repositories {
   # Make sure it's enabled. Ubuntu MATE has it, while the standard Ubuntu doesn't.
   # The program exits with success if the repository is already enabled.
   #
-  add-apt-repository --yes --no-update universe
+  checked_add_apt_repository universe
 }
 
 # Mint 20 has the CDROM repository enabled, but apt fails when updating due to it (or possibly due
@@ -838,7 +865,7 @@ function ask_dataset_create_options {
 function install_host_zfs_packages {
   if [[ $v_use_ppa == "1" ]]; then
     if [[ ${ZFS_SKIP_LIVE_ZFS_MODULE_INSTALL:-} != "1" ]]; then
-      add-apt-repository --yes --no-update "$c_ppa"
+      checked_add_apt_repository "$c_ppa"
       apt update
 
       # Libelf-dev allows `CONFIG_STACK_VALIDATION` to be set - it's optional, but good to have.
@@ -1280,7 +1307,7 @@ function install_jail_base_packages {
 #
 function install_jail_zfs_packages {
   if [[ $v_use_ppa == "1" ]]; then
-    chroot_execute "add-apt-repository --yes --no-update $c_ppa"
+    checked_add_apt_repository "$c_ppa" --chroot
 
     chroot_execute "apt update"
 

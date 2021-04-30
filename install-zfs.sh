@@ -105,17 +105,17 @@ c_udevadm_settle_timeout=10 # seconds
 #
 #   $ function install_jail_zfs_packages { :; }
 #   $ function install_jail_zfs_packages_Debian { :; }
-#   $ distro_dependent_invoke "install_jail_zfs_packages"
+#   $ invoke "install_jail_zfs_packages"
 #
 #   If the distribution is `Debian`, the second will be invoked, otherwise, the first.
 #
 #   $ function update_zed_cache_Ubuntu { :; }
-#   $ distro_dependent_invoke "update_zed_cache" --optional
+#   $ invoke "update_zed_cache" --optional
 #
 #   If the distribution is `Debian`, nothing will happen.
 #
 #   $ function update_zed_cache_Ubuntu { :; }
-#   $ distro_dependent_invoke "update_zed_cache"
+#   $ invoke "update_zed_cache"
 #
 #   If the distribution is `Debian`, an error will be raised.
 #

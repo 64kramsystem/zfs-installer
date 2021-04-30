@@ -150,21 +150,24 @@ c_udevadm_settle_timeout=10 # seconds
 # A target function must exist, otherwise a error is raised, unless `--optional` is specified.
 # `--optional` is useful when a step is specific to a single distribution, e.g. Debian's root password.
 #
+# WATCH OUT! Don't forget *not* to call this from an ovverridden function, otherwise, it will call itself
+# endlessly!
+#
 # Examples:
 #
 #   $ function install_jail_zfs_packages { :; }
 #   $ function install_jail_zfs_packages_Debian { :; }
-#   $ distro_dependent_invoke "install_jail_zfs_packages"
+#   $ invoke "install_jail_zfs_packages"
 #
 #   If the distribution is `Debian`, the second will be invoked, otherwise, the first.
 #
 #   $ function update_zed_cache_Ubuntu { :; }
-#   $ distro_dependent_invoke "update_zed_cache" --optional
+#   $ invoke "update_zed_cache" --optional
 #
 #   If the distribution is `Debian`, nothing will happen.
 #
 #   $ function update_zed_cache_Ubuntu { :; }
-#   $ distro_dependent_invoke "update_zed_cache"
+#   $ invoke "update_zed_cache"
 #
 #   If the distribution is `Debian`, an error will be raised.
 #
@@ -547,7 +550,7 @@ function prepare_standard_repositories_Linuxmint {
 
   # The universe repository may be already enabled, but it's more solid to ensure it.
   #
-  invoke "prepare_standard_repositories"
+  prepare_standard_repositories
 }
 
 function prepare_standard_repositories_Debian {
@@ -1320,7 +1323,7 @@ function install_jail_zfs_packages_UbuntuServer {
   if [[ $v_use_ppa != "1" ]]; then
     chroot_execute "apt install --yes zfsutils-linux zfs-initramfs"
   else
-    invoke "install_jail_zfs_packages"
+    install_jail_zfs_packages
   fi
 }
 

@@ -98,6 +98,9 @@ c_udevadm_settle_timeout=10 # seconds
 # A target function must exist, otherwise a error is raised, unless `--optional` is specified.
 # `--optional` is useful when a step is specific to a single distribution, e.g. Debian's root password.
 #
+# WATCH OUT! Don't forget *not* to call this from an ovverridden function, otherwise, it will call itself
+# endlessly!
+#
 # Examples:
 #
 #   $ function install_jail_zfs_packages { :; }

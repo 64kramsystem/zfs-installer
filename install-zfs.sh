@@ -547,7 +547,7 @@ function prepare_standard_repositories_Linuxmint {
 
   # The universe repository may be already enabled, but it's more solid to ensure it.
   #
-  invoke "prepare_standard_repositories"
+  prepare_standard_repositories
 }
 
 function prepare_standard_repositories_Debian {
@@ -1320,7 +1320,7 @@ function install_jail_zfs_packages_UbuntuServer {
   if [[ $v_use_ppa != "1" ]]; then
     chroot_execute "apt install --yes zfsutils-linux zfs-initramfs"
   else
-    invoke "install_jail_zfs_packages"
+    install_jail_zfs_packages
   fi
 }
 

@@ -826,7 +826,7 @@ function install_host_packages_UbuntuServer {
     umount /lib/modules
     rm -r /lib/modules
     ln -s /tmp/modules /lib
-    systemctl start 'systemd-udevd*'
+    systemctl start --all 'systemd-udevd*'
 
     # Additionally, the linux packages for the running kernel are not installed, at least when
     # the standard installation is performed. Didn't test on the HWE option; if it's not required,

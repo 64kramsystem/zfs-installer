@@ -1034,6 +1034,12 @@ You can switch anytime to this terminal, and back, in order to read the instruct
   # Server, but it's better not to take risks.
   #
   if ! mountpoint -q "$c_installed_os_mount_dir"; then
+    # There must be a conspiracy 🙄 `/target` used to be created before [20.04.2].
+    #
+    if [[ ! -d $c_installed_os_mount_dir ]]; then
+      mkdir "$c_installed_os_mount_dir"
+    fi
+
     mount "${v_temp_volume_device}p2" "$c_installed_os_mount_dir"
   fi
 

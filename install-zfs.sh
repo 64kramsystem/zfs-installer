@@ -319,7 +319,7 @@ function check_system_memory {
       #
       local dialog_message='WARNING! In some cases, the ZFS modules require compilation.
 
-On systems with relatively little RAM, the procedure may crash during the compilation, for example with 3 GB on Debian 10.9.
+On systems with relatively little RAM and many hardware threads, the procedure may crash during the compilation (e.g. 3 GB/16 threads).
 
 In such cases, the module building may fail abruptly, either without visible errors (leaving "process killed" messages in the syslog), or with package installation errors (leaving odd errors in the module'\''s `make.log`).'
 

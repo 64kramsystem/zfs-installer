@@ -395,6 +395,11 @@ function check_prerequisites {
   elif [[ ! ${c_supported_linux_distributions["$v_linux_distribution"]} =~ $distro_version_regex ]]; then
     echo "This Linux distribution version ($v_linux_version) is not supported; supported versions: ${c_supported_linux_distributions["$v_linux_distribution"]}"
     exit 1
+  elif [[ ${ZFS_USE_PPA:-} == "1" && $v_linux_distribution == "UbuntuServer" ]]; then
+    # As of Jun/2021, it breaks the installation.
+    #
+    echo "The PPA is not (currently) supported on Ubuntu Server!"
+    exit 1
   fi
 
   set +x

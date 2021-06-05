@@ -395,6 +395,11 @@ function check_prerequisites {
   elif [[ ! ${c_supported_linux_distributions["$v_linux_distribution"]} =~ $distro_version_regex ]]; then
     echo "This Linux distribution version ($v_linux_version) is not supported; supported versions: ${c_supported_linux_distributions["$v_linux_distribution"]}"
     exit 1
+  elif [[ ${ZFS_USE_PPA:-} == "1" && $v_linux_distribution == "UbuntuServer" ]]; then
+    # As of Jun/2021, it breaks the installation.
+    #
+    echo "The PPA is not (currently) supported on Ubuntu Server!"
+    exit 1
   fi
 
   set +x
@@ -430,7 +435,7 @@ function check_system_memory {
       #
       local dialog_message='WARNING! In some cases, the ZFS modules require compilation.
 
-On systems with relatively little RAM, the procedure may crash during the compilation, for example with 3 GB on Debian 10.9.
+On systems with relatively little RAM and many hardware threads, the procedure may crash during the compilation (e.g. 3 GB/16 threads).
 
 In such cases, the module building may fail abruptly, either without visible errors (leaving "process killed" messages in the syslog), or with package installation errors (leaving odd errors in the module'\''s `make.log`).'
 
@@ -920,7 +925,7 @@ function install_host_zfs_packages_UbuntuServer {
     umount /lib/modules
     rm -r /lib/modules
     ln -s /tmp/modules /lib
-    systemctl start 'systemd-udevd*'
+    systemctl start --all 'systemd-udevd*'
 
     # Additionally, the linux packages for the running kernel are not installed, at least when
     # the standard installation is performed. Didn't test on the HWE option; if it's not required,
@@ -1118,6 +1123,12 @@ You can switch anytime to this terminal, and back, in order to read the instruct
   # Server, but it's better not to take risks.
   #
   if ! mountpoint -q "$c_installed_os_mount_dir"; then
+    # There must be a conspiracy 🙄 `/target` used to be created before [20.04.2].
+    #
+    if [[ ! -d $c_installed_os_mount_dir ]]; then
+      mkdir "$c_installed_os_mount_dir"
+    fi
+
     mount "${v_temp_volume_device}p2" "$c_installed_os_mount_dir"
   fi
 

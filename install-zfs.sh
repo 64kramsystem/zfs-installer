@@ -1218,6 +1218,17 @@ function create_pools_and_datasets {
     "$c_bpool_name" "${v_pools_raid_type[@]}" "${bpool_disks_partitions[@]}"
 }
 
+function create_pools_and_datasets_UbuntuServer {
+  create_pools_and_datasets
+
+  # This dataset seems to be hardcoded on Ubuntu Server's grub configuration (possibly, /etc/grub.d/10_linux_zfs#try_default_layout_bpool()).
+
+  zfs set canmount=off "$c_bpool_name"
+
+  zfs create -o canmount=off "$c_bpool_name/BOOT"
+  zfs create -o mountpoint=/boot "$c_bpool_name/BOOT/ROOT"
+}
+
 function create_swap_volume {
   if [[ $v_swap_size -gt 0 ]]; then
     zfs create \

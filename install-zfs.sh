@@ -1389,9 +1389,15 @@ function update_zed_cache_Debian {
   local success=
 
   if [[ ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
+    local zfs_root_fs zfs_boot_fs
+
+    zfs_root_fs=$(chroot_execute 'zfs list /     | awk "NR==2 {print \$1}"')
+    zfs_boot_fs=$(chroot_execute 'zfs list /boot | awk "NR==2 {print \$1}"')
+
     # Takes around half second on a test VM.
     #
-    chroot_execute "zfs set canmount=noauto $v_rpool_name"
+    chroot_execute "zfs set canmount=on $zfs_boot_fs"
+    chroot_execute "zfs set canmount=on $zfs_root_fs"
 
     SECONDS=0
 

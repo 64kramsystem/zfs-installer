@@ -119,7 +119,7 @@ USERDATA/%P                    mountpoint=/home/%P canmount=on com.ubuntu.zsys:b
 '
 c_zfs_mount_dir=/mnt
 c_installed_os_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 

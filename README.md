@@ -58,10 +58,10 @@ then follow the instructions; halfway through the procedure, the GUI installer o
 
 ### Ubuntu Server
 
-Ubuntu Server requires a slightly different execution procedure:
+Ubuntu Server requires a slightly different execution procedure, and the version 0.3.x of the script (the [new procedure](https://openzfs.github.io/openzfs-docs/Getting%20Started/Ubuntu/Ubuntu%2020.04%20Root%20on%20ZFS.html) doesn't directly support Ubuntu Server):
 
 - when the installer welcome screen shows up, tap `Ctrl+Alt+F2`,
-- then type `curl -L https://git.io/JelI5 | sudo bash`.
+- then type `curl -L https://git.io/JGjA6 | sudo bash`.
 
 then follow the instructions.
 

@@ -119,7 +119,7 @@ USERDATA/%P                    mountpoint=/home/%P canmount=on com.ubuntu.zsys:b
 '
 c_zfs_mount_dir=/mnt
 c_installed_os_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 
@@ -1450,10 +1450,15 @@ function fix_filesystem_mount_ordering {
   local success=
 
   if [[ ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$c_bpool_name || ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
+    local zfs_root_fs zfs_boot_fs
+
+    zfs_root_fs=$(chroot_execute 'zfs list /     | awk "NR==2 {print \$1}"')
+    zfs_boot_fs=$(chroot_execute 'zfs list /boot | awk "NR==2 {print \$1}"')
+
     # For the rpool only, it takes around half second on a test VM.
     #
-    chroot_execute "zfs set canmount=on $c_bpool_name"
-    chroot_execute "zfs set canmount=on $v_rpool_name/ROOT"
+    chroot_execute "zfs set canmount=on $zfs_boot_fs"
+    chroot_execute "zfs set canmount=on $zfs_root_fs"
 
     SECONDS=0
 

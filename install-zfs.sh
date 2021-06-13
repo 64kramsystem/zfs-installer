@@ -1205,9 +1205,10 @@ function create_pools_and_datasets {
     fi
   done < <(echo "$interpolated_dataset_create_options")
 
-  chmod 700 /mnt/root
-  # This is fine independently of the user creating a dataset for /tmp or not.
-  chmod 1777 /mnt/tmp
+  # Here, the original procedure sets the permissions for /root (700) and /tmp (1777), however, in this
+  # script we don't need to do it, since we sync the O/S installer result, which is already configured.
+  # In case of changes, don't forget that the destination layout may be empty, at this point, due to
+  # the user's ZFS filesystems configuration!
 
   # BOOT POOL CREATION #################
 

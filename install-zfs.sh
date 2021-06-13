@@ -50,10 +50,12 @@ c_default_boot_partition_size=2048 # megabytes
 c_memory_warning_limit=$((3584 - 128)) # megabytes; exclude some RAM, which can be occupied/shared
 c_default_bpool_create_options=(
   -o ashift=12
+  -o autotrim=on
   -O devices=off
 )
 c_default_rpool_create_options=(
   -o ashift=12
+  -o autotrim=on
   -O acltype=posixacl
   -O compression=lz4
   -O dnodesize=auto
@@ -1404,45 +1406,6 @@ function update_zed_cache_Debian {
   chroot_execute "sed -Ei 's|$c_installed_os_data_mount_dir/?|/|' /etc/zfs/zfs-list.cache/$v_rpool_name"
 }
 
-# We don't care about synchronizing with the `fstrim` service for two reasons:
-#
-# - we assume that there are no other (significantly) large filesystems;
-# - trimming is fast (takes minutes on a 1 TB disk).
-#
-# The code is a straight copy of the `fstrim` service.
-#
-function configure_pools_trimming {
-  print_step_info_header
-
-  chroot_execute "cat > /lib/systemd/system/zfs-trim.service << UNIT
-[Unit]
-Description=Discard unused ZFS blocks
-ConditionVirtualization=!container
-
-[Service]
-Type=oneshot
-ExecStart=/sbin/zpool trim $c_bpool_name
-ExecStart=/sbin/zpool trim $v_rpool_name
-UNIT"
-
-  chroot_execute "  cat > /lib/systemd/system/zfs-trim.timer << TIMER
-[Unit]
-Description=Discard unused ZFS blocks once a week
-ConditionVirtualization=!container
-
-[Timer]
-OnCalendar=weekly
-AccuracySec=1h
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-TIMER"
-
-  chroot_execute "systemctl daemon-reload"
-  chroot_execute "systemctl enable zfs-trim.timer"
-}
-
 function configure_remaining_settings {
   print_step_info_header
 
@@ -1552,7 +1515,6 @@ sync_efi_partitions
 configure_boot_pool_import
 update_initramfs
 distro_dependent_invoke "update_zed_cache" --noforce
-configure_pools_trimming
 configure_remaining_settings
 
 prepare_for_system_exit

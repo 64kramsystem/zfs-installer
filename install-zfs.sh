@@ -1205,9 +1205,10 @@ function create_pools_and_datasets {
     fi
   done < <(echo "$interpolated_dataset_create_options")
 
-  chmod 700 /mnt/root
-  # This is fine independently of the user creating a dataset for /tmp or not.
-  chmod 1777 /mnt/tmp
+  # Here, the original procedure sets the permissions for /root (700) and /tmp (1777), however, in this
+  # script we don't need to do it, since we sync the O/S installer result, which is already configured.
+  # In case of changes, don't forget that the destination layout may be empty, at this point, due to
+  # the user's ZFS filesystems configuration!
 
   # BOOT POOL CREATION #################
 
@@ -1255,13 +1256,17 @@ function sync_os_temp_installation_dir_to_rpool {
     perl -lane 'BEGIN { $/ = "\r"; $|++ } $F[1] =~ /(\d+)%$/ && print $1' |
     whiptail --gauge "Syncing the installed O/S to the root pool FS..." 30 100 0
 
-  mkdir "$c_zfs_mount_dir/run"
-
-  # Required destination of symlink `/etc/resolv.conf`, present in Ubuntu systems (not Debian).
+  # Ubiquity used to leave `/target/run`, which included the file symlinked by `/etc/resolv.conf`. At
+  # some point, it started cleaning it after installation, leaving the symlink broken, which caused
+  # the jail preparation to fail. For this reason, we now create the dir/file manually.
+  # As of Jun/2021, it's not clear if there is any O/S leaving the dir/file, but for simplicity, we
+  # always create them if not existing.
   #
-  if [[ -d $c_installed_os_mount_dir/run/systemd/resolve ]]; then
-    rsync -av --relative "$c_installed_os_mount_dir/run/./systemd/resolve" "$c_zfs_mount_dir/run"
-  fi
+  mkdir -p "$c_installed_os_mount_dir/run/systemd/resolve"
+  touch "$c_installed_os_mount_dir/run/systemd/resolve/stub-resolv.conf"
+
+  mkdir "$c_zfs_mount_dir/run"
+  rsync -av --relative "$c_installed_os_mount_dir/run/./systemd/resolve" "$c_zfs_mount_dir/run"
 
   umount "$c_installed_os_mount_dir"
 }

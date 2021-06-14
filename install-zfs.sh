@@ -1178,7 +1178,7 @@ function create_pools_and_datasets {
     "$v_rpool_name" "${v_pools_raid_type[@]}" "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
 
-  # DATASETS CREATION ##################
+  # RPOOL DATASETS CREATION ############
 
   local interpolated_dataset_create_options
   interpolated_dataset_create_options=$(eval echo \""$v_dataset_create_options"\")
@@ -1209,13 +1209,19 @@ function create_pools_and_datasets {
   # In case of changes, don't forget that the destination layout may be empty, at this point, due to
   # the user's ZFS filesystems configuration!
 
-  # BOOT POOL CREATION #################
+  # BOOT POOL/DATASETS CREATION ########
+
+  # Creating the datasets is not necessary, however, it avoids the annoying GRUB warning when updating
+  # (`cannot open 'bpool/BOOT/ROOT': dataset does not exist`).
 
   zpool create \
     -o cachefile=/etc/zfs/zpool.cache \
     "${v_bpool_create_options[@]}" \
-    -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
+    -O mountpoint=/boot -O canmount=off -R "$c_zfs_mount_dir" -f \
     "$c_bpool_name" "${v_pools_raid_type[@]}" "${bpool_disks_partitions[@]}"
+
+  zfs create -o canmount=off "$c_bpool_name/BOOT"
+  zfs create -o mountpoint=/boot "$c_bpool_name/BOOT/ROOT"
 }
 
 function create_swap_volume {

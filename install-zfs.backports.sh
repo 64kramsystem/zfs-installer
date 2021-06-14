@@ -1403,7 +1403,7 @@ function prepare_efi_partition {
 function configure_and_update_grub {
   chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX_DEFAULT=\"\K/init_on_alloc=0 /'        /etc/default/grub"
 
-  chroot_execute "perl -i -pe 's/(GRUB_CMDLINE_LINUX=\")/\${1}root=ZFS=$v_rpool_name /'    /etc/default/grub"
+  chroot_execute "perl -i -pe 's/GRUB_CMDLINE_LINUX=\"\K/root=ZFS=$v_rpool_name /'         /etc/default/grub"
 
   # Silence warning during the grub probe (source: https://git.io/JenXF).
   #

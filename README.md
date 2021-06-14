@@ -4,32 +4,17 @@
 
 ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Ubuntu-based operating systems using their standard installer (or debootstrap, or any custom script).
 
-- [Status](#status)
 - [Requirements and functionality](#requirements-and-functionality)
 - [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
 - [Instructions](#instructions)
   - [Ubuntu Server](#ubuntu-server)
+- [Stability](#stability)
 - [Demo](#demo)
   - [Unsupported systems/Issues](#unsupported-systemsissues)
   - [Unattended installations](#unattended-installations)
 - [Bug reporting/feature requests](#bug-reportingfeature-requests)
 - [Help](#help)
 - [Credits](#credits)
-
-## Status
-
-**WARNING: THIS PROJECT HAS BEEN PUT ON HOLD, AND IT'S NOT STABLE ANYMORE**
-
-Working on this type of program is extremely time consuming, for a few reasons:
-
-1. installers are sometimes updated (even within the same Ubuntu patch version), breaking the program in unpredictable ways;
-2. the problem above is compounded by different distros having minor differences in configuration, which again, break the program;
-3. it's not possible to automate the testing without a considerably sophisticated tool (which should, in theory, perform the operations on the Ubiquity GUI; this is also impossible for Ubuntu Server); while debootstrap installations can be programmatically tested, the bulk of the bugs are related to the GUI installer
-4. I'm the only developer actively working on the project; the ZFS are collaborating with Canonical, and, while the outcome is highly desirable for ZFS, it makes manual execution the only option for even minor customization
-
-Therefore, I'm closing this project. I may keep developing in order to support my home installation, but I can't give any guarantee.
-
-I'm open to PR, though.
 
 ## Requirements and functionality
 
@@ -80,6 +65,16 @@ Ubuntu Server requires a slightly different execution procedure:
 - then type `curl -L https://git.io/JelI5 | sudo bash`.
 
 then follow the instructions.
+
+## Stability
+
+The project is carefully developed, however, it's practically impossible to guarantee continuous stability, for two reasons:
+
+1. Linux distributions frequently apply small changes to their installers, even on the same distribution version,
+1. automated testing is not feasible; although debootstrap installations could be automated, the bulk of the work is related to the installers, which can't be automated without sophisticated GUI automation,
+1. testing is time consuming, so it can be performed on a limited amount of distros at a time.
+
+Errors due to installer will cause the script to terminate, so, generally speaking, if the script completes, the system has been successfully setup.
 
 ## Demo
 

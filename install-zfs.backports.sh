@@ -1178,7 +1178,7 @@ function create_pools_and_datasets {
     "$v_rpool_name" "${v_pools_raid_type[@]}" "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
 
-  # DATASETS CREATION ##################
+  # RPOOL DATASETS CREATION ############
 
   local interpolated_dataset_create_options
   interpolated_dataset_create_options=$(eval echo \""$v_dataset_create_options"\")
@@ -1209,15 +1209,19 @@ function create_pools_and_datasets {
   # In case of changes, don't forget that the destination layout may be empty, at this point, due to
   # the user's ZFS filesystems configuration!
 
-  # BOOT POOL CREATION #################
+  # BOOT POOL/DATASETS CREATION ########
 
-  # We can't create the datasets with the old procedure; on boot, the `bpool` dataset is attempted to be mounted.
-  # Possibly, this can be fixed in configure_boot_pool_import()->ExecStart.
+  # Creating the datasets is not necessary, however, it avoids the annoying GRUB warning when updating
+  # (`cannot open 'bpool/BOOT/ROOT': dataset does not exist`).
 
   zpool create \
+    -o cachefile=/etc/zfs/zpool.cache \
     "${v_bpool_create_options[@]}" \
-    -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
+    -O mountpoint=/boot -O canmount=off -R "$c_zfs_mount_dir" -f \
     "$c_bpool_name" "${v_pools_raid_type[@]}" "${bpool_disks_partitions[@]}"
+
+  zfs create -o canmount=off "$c_bpool_name/BOOT"
+  zfs create -o mountpoint=/boot "$c_bpool_name/BOOT/ROOT"
 }
 
 function create_swap_volume {
@@ -1426,6 +1430,12 @@ function configure_and_update_grub {
   # performed on 18.04, but it's better to keep this reference just in case.
 
   chroot_execute "update-grub"
+}
+
+function configure_and_update_grub_Debian {
+  chroot_execute "perl -i -pe 's|GRUB_CMDLINE_LINUX=\"\K|bootfs=$c_bpool_name/BOOT/ROOT |' /etc/default/grub"
+
+  configure_and_update_grub
 }
 
 function sync_efi_partitions {

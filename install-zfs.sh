@@ -33,7 +33,7 @@ v_free_tail_space=           # integer
 
 # Variables set during execution
 
-v_linux_distribution=        # Ubuntu, LinuxMint, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
+v_linux_distribution=        # Debian, Ubuntu, ... WATCH OUT: not necessarily from `lsb_release` (ie. UbuntuServer)
 v_use_ppa=                   # 1=true, false otherwise (applies only to Ubuntu-based).
 v_temp_volume_device=        # /dev/zdN; scope: setup_partitions -> sync_os_temp_installation_dir_to_rpool
 v_suitable_disks=()          # (/dev/by-id/disk_id, ...); scope: find_suitable_disks -> select_disk
@@ -118,7 +118,7 @@ USERDATA/%P                    mountpoint=/home/%P canmount=on com.ubuntu.zsys:b
 '
 c_zfs_mount_dir=/mnt
 c_installed_os_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 
@@ -1429,6 +1429,15 @@ function configure_and_update_grub {
   # performed on 18.04, but it's better to keep this reference just in case.
 
   chroot_execute "update-grub"
+}
+
+function configure_and_update_grub_Debian {
+  zfs_root_fs=$(chroot_execute 'zfs list /     | awk "NR==2 {print \$1}"')
+  zfs_boot_fs=$(chroot_execute 'zfs list /boot | awk "NR==2 {print \$1}"')
+
+  chroot_execute "perl -i -pe 's|GRUB_CMDLINE_LINUX=\"\K|root=ZFS=$zfs_root_fs bootfs=$zfs_boot_fs |' /etc/default/grub"
+
+  configure_and_update_grub
 }
 
 function sync_efi_partitions {

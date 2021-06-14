@@ -1369,32 +1369,34 @@ function update_initramfs {
   chroot_execute "update-initramfs -u"
 }
 
-function update_zed_cache_Debian {
+function fix_filesystem_mount_ordering_Debian {
   chroot_execute "mkdir /etc/zfs/zfs-list.cache"
-  chroot_execute "touch /etc/zfs/zfs-list.cache/$v_rpool_name"
+  chroot_execute "touch /etc/zfs/zfs-list.cache/$c_bpool_name /etc/zfs/zfs-list.cache/$v_rpool_name"
 
   # On Debian, this file may exist already.
   #
   chroot_execute "if [[ ! -f /etc/zfs/zed.d/history_event-zfs-list-cacher.sh ]]; then ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/; fi"
 
-  # Assumed to be present by the zedlet above, but missing.
+  # Assumed to be present by the zedlet above on Debian, but missing.
   # Filed issue: https://github.com/zfsonlinux/zfs/issues/9945.
   #
   chroot_execute "mkdir /run/lock"
 
+  # It's not clear (based on the help) why it's explicitly run in foreground (`-F`), but backgrounded.
+  #
   chroot_execute "zed -F &"
 
   # We could pool the events via `zpool events -v`, but it's much simpler to just check on the file.
   #
   local success=
 
-  if [[ ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
+  if [[ ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$c_bpool_name || ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
     local zfs_root_fs zfs_boot_fs
 
     zfs_root_fs=$(chroot_execute 'zfs list /     | awk "NR==2 {print \$1}"')
     zfs_boot_fs=$(chroot_execute 'zfs list /boot | awk "NR==2 {print \$1}"')
 
-    # Takes around half second on a test VM.
+    # For the rpool only, it takes around half second on a test VM.
     #
     chroot_execute "zfs set canmount=on $zfs_boot_fs"
     chroot_execute "zfs set canmount=on $zfs_root_fs"
@@ -1402,23 +1404,25 @@ function update_zed_cache_Debian {
     SECONDS=0
 
     while [[ $SECONDS -lt 5 ]]; do
-      if [[ -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
+      if [[ ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$c_bpool_name || ! -s $c_zfs_mount_dir/etc/zfs/zfs-list.cache/$v_rpool_name ]]; then
         success=1
         break
       else
         sleep 0.25
       fi
     done
+  else
+    success=1
   fi
+
+  chroot_execute "pkill zed"
 
   if [[ $success -ne 1 ]]; then
     echo "Error: The ZFS cache hasn't been updated by ZED!"
     exit 1
   fi
 
-  chroot_execute "pkill zed"
-
-  chroot_execute "sed -Ei 's|$c_installed_os_mount_dir/?|/|' /etc/zfs/zfs-list.cache/$v_rpool_name"
+  chroot_execute "sed -Ei 's|$c_zfs_mount_dir/?|/|' /etc/zfs/zfs-list.cache/*"
 }
 
 function configure_remaining_settings {
@@ -1529,7 +1533,7 @@ invoke "configure_and_update_grub"
 invoke "sync_efi_partitions"
 invoke "configure_boot_pool_import"
 invoke "update_initramfs"
-invoke "update_zed_cache" --optional
+invoke "fix_filesystem_mount_ordering" --optional
 invoke "configure_remaining_settings"
 
 invoke "prepare_for_system_exit"

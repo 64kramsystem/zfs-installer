@@ -1431,6 +1431,15 @@ function configure_and_update_grub {
   chroot_execute "update-grub"
 }
 
+function configure_and_update_grub_Debian {
+  zfs_root_fs=$(chroot_execute 'zfs list /     | awk "NR==2 {print \$1}"')
+  zfs_boot_fs=$(chroot_execute 'zfs list /boot | awk "NR==2 {print \$1}"')
+
+  chroot_execute "perl -i -pe 's|GRUB_CMDLINE_LINUX=\"\K|root=ZFS=$zfs_root_fs bootfs=$zfs_boot_fs |' /etc/default/grub"
+
+  configure_and_update_grub
+}
+
 function sync_efi_partitions {
   for ((i = 1; i < ${#v_selected_disks[@]}; i++)); do
     local synced_efi_partition_path="/boot/efi$((i + 1))"

@@ -1385,7 +1385,7 @@ function prepare_fstab {
       local mountpoint=/boot/efi$((i + 1))
     fi
 
-    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $mountpoint vfat defaults 0 0 >> /etc/fstab"
+    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $mountpoint vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 0 >> /etc/fstab"
   done
 
   if (( v_swap_size > 0 )); then

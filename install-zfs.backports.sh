@@ -1385,7 +1385,7 @@ function prepare_fstab {
     # It's important to give a long enough timeout time; on relatively slow machines (e.g. virtual machines),
     # a timeout of 1 will fail.
     #
-    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $mountpoint vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 1 >> /etc/fstab"
+    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $mountpoint vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 0 >> /etc/fstab"
   done
 
   # The service is created in the configure_boot_pool_import() step.

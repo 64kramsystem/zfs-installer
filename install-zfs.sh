@@ -1375,7 +1375,7 @@ function update_zed_cache_Debian {
 
   # On Debian, this file may exist already.
   #
-  chroot_execute "[[ ! -f /etc/zfs/zed.d/history_event-zfs-list-cacher.sh ]] && ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
+  chroot_execute "if [[ ! -f /etc/zfs/zed.d/history_event-zfs-list-cacher.sh ]]; then ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/; fi"
 
   # Assumed to be present by the zedlet above, but missing.
   # Filed issue: https://github.com/zfsonlinux/zfs/issues/9945.

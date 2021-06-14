@@ -4,7 +4,6 @@
 
 ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Ubuntu-based operating systems using their standard installer (or debootstrap, or any custom script).
 
-- [Status](#status)
 - [Requirements and functionality](#requirements-and-functionality)
 - [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
 - [Instructions](#instructions)
@@ -15,21 +14,6 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 - [Bug reporting/feature requests](#bug-reportingfeature-requests)
 - [Help](#help)
 - [Credits](#credits)
-
-## Status
-
-**WARNING: THIS PROJECT HAS BEEN PUT ON HOLD, AND IT'S NOT STABLE ANYMORE**
-
-Working on this type of program is extremely time consuming, for a few reasons:
-
-1. installers are sometimes updated (even within the same Ubuntu patch version), breaking the program in unpredictable ways;
-2. the problem above is compounded by different distros having minor differences in configuration, which again, break the program;
-3. it's not possible to automate the testing without a considerably sophisticated tool (which should, in theory, perform the operations on the Ubiquity GUI; this is also impossible for Ubuntu Server); while debootstrap installations can be programmatically tested, the bulk of the bugs are related to the GUI installer
-4. I'm the only developer actively working on the project; the ZFS are collaborating with Canonical, and, while the outcome is highly desirable for ZFS, it makes manual execution the only option for even minor customization
-
-Therefore, I'm closing this project. I may keep developing in order to support my home installation, but I can't give any guarantee.
-
-I'm open to PR, though.
 
 ## Requirements and functionality
 

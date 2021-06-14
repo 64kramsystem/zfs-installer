@@ -1258,14 +1258,34 @@ function install_jail_zfs_packages_UbuntuServer {
   fi
 }
 
-function prepare_efi_partition {
-  # Wait for /boot to be mounted before mounting the EFI partitions; we use the services as dependency
-  # rather than a mount (`requires-mounts-for`) because the `/boot` path may exist but still not mounted.
-  # It's important to give a long enough timeout time; on relatively slow machines (e.g. virtual machines),
-  # a timeout of 1 will fail.
-  #
-  chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[0]}"-part1) /boot/efi vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 1 > /etc/fstab"
+function prepare_fstab {
+  chroot_execute "true > /etc/fstab"
 
+  for ((i = 0; i < ${#v_selected_disks[@]}; i++)); do
+    if (( i == 0 )); then
+      local mountpoint=/boot/efi
+    else
+      local mountpoint=/boot/efi$((i + 1))
+    fi
+
+    # Wait for /boot to be mounted before mounting the EFI partitions; we use the services as dependency
+    # rather than a mount (`requires-mounts-for`) because the `/boot` path may exist but still not mounted.
+    # It's important to give a long enough timeout time; on relatively slow machines (e.g. virtual machines),
+    # a timeout of 1 will fail.
+    #
+    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $mountpoint vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 1 >> /etc/fstab"
+  done
+
+  # The service is created in the configure_boot_pool_import() step.
+  #
+  chroot_execute "echo $c_bpool_name /boot zfs nodev,relatime,x-systemd.requires=zfs-import-$c_bpool_name.service 0 0 >> /etc/fstab"
+
+  if (( v_swap_size > 0 )); then
+    chroot_execute "echo /dev/zvol/$v_rpool_name/swap none swap discard 0 0 >> /etc/fstab"
+  fi
+}
+
+function prepare_efi_partition {
   chroot_execute "mkdir -p /boot/efi"
   chroot_execute "mount /boot/efi"
 
@@ -1304,10 +1324,6 @@ function sync_efi_partitions {
   for ((i = 1; i < ${#v_selected_disks[@]}; i++)); do
     local synced_efi_partition_path="/boot/efi$((i + 1))"
 
-    # Reference: prepare_efi_partition()
-    #
-    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $synced_efi_partition_path vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 1 >> /etc/fstab"
-
     chroot_execute "mkdir -p $synced_efi_partition_path"
     chroot_execute "mount $synced_efi_partition_path"
 
@@ -1342,7 +1358,8 @@ UNIT"
   chroot_execute "systemctl enable zfs-import-$c_bpool_name.service"
 
   chroot_execute "zfs set mountpoint=legacy $c_bpool_name"
-  chroot_execute "echo $c_bpool_name /boot zfs nodev,relatime,x-systemd.requires=zfs-import-$c_bpool_name.service 0 0 >> /etc/fstab"
+
+  # the fstab entry is added in the prepare_fstab() step.
 }
 
 # This step is important in cases where the keyboard layout is not the standard one.
@@ -1399,7 +1416,8 @@ function update_zed_cache_Debian {
 }
 
 function configure_remaining_settings {
-  [[ $v_swap_size -gt 0 ]] && chroot_execute "echo /dev/zvol/$v_rpool_name/swap none swap discard 0 0 >> /etc/fstab" || true
+  # The swap volume, if specified, is set in the prepare_fstab() step.
+
   chroot_execute "echo RESUME=none > /etc/initramfs-tools/conf.d/resume"
 }
 
@@ -1499,6 +1517,7 @@ fi
 invoke "prepare_jail"
 invoke "install_jail_base_packages"
 invoke "install_jail_zfs_packages"
+invoke "prepare_fstab"
 invoke "prepare_efi_partition"
 invoke "configure_and_update_grub"
 invoke "sync_efi_partitions"

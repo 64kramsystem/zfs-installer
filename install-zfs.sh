@@ -1375,11 +1375,25 @@ function install_jail_zfs_packages_UbuntuServer {
   fi
 }
 
-function prepare_efi_partition {
-  # The other mounts are configured/synced in the EFI partitions sync stage.
-  #
-  chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[0]}"-part1) /boot/efi vfat defaults 0 0 > /etc/fstab"
+function prepare_fstab {
+  chroot_execute "true > /etc/fstab"
 
+  for ((i = 0; i < ${#v_selected_disks[@]}; i++)); do
+    if (( i == 0 )); then
+      local mountpoint=/boot/efi
+    else
+      local mountpoint=/boot/efi$((i + 1))
+    fi
+
+    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $mountpoint vfat defaults 0 0 >> /etc/fstab"
+  done
+
+  if (( v_swap_size > 0 )); then
+    chroot_execute "echo /dev/zvol/$v_rpool_name/swap none swap discard 0 0 >> /etc/fstab"
+  fi
+}
+
+function prepare_efi_partition {
   chroot_execute "mkdir -p /boot/efi"
   chroot_execute "mount /boot/efi"
 
@@ -1415,8 +1429,6 @@ function configure_and_update_grub {
 function sync_efi_partitions {
   for ((i = 1; i < ${#v_selected_disks[@]}; i++)); do
     local synced_efi_partition_path="/boot/efi$((i + 1))"
-
-    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $synced_efi_partition_path vfat defaults 0 0 >> /etc/fstab"
 
     chroot_execute "mkdir -p $synced_efi_partition_path"
     chroot_execute "mount $synced_efi_partition_path"
@@ -1495,7 +1507,8 @@ function fix_filesystem_mount_ordering {
 }
 
 function configure_remaining_settings {
-  [[ $v_swap_size -gt 0 ]] && chroot_execute "echo /dev/zvol/$v_rpool_name/swap none swap discard 0 0 >> /etc/fstab" || true
+  # The swap volume, if specified, is set in the prepare_fstab() step.
+
   chroot_execute "echo RESUME=none > /etc/initramfs-tools/conf.d/resume"
 }
 
@@ -1598,6 +1611,7 @@ fi
 invoke "prepare_jail"
 invoke "install_jail_base_packages"
 invoke "install_jail_zfs_packages"
+invoke "prepare_fstab"
 invoke "prepare_efi_partition"
 invoke "configure_and_update_grub"
 invoke "sync_efi_partitions"

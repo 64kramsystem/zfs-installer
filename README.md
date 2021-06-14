@@ -8,6 +8,7 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 - [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
 - [Instructions](#instructions)
   - [Ubuntu Server](#ubuntu-server)
+- [Stability](#stability)
 - [Demo](#demo)
   - [Unsupported systems/Issues](#unsupported-systemsissues)
   - [Unattended installations](#unattended-installations)
@@ -64,6 +65,16 @@ Ubuntu Server requires a slightly different execution procedure:
 - then type `curl -L https://git.io/JelI5 | sudo bash`.
 
 then follow the instructions.
+
+## Stability
+
+The project is carefully developed, however, it's practically impossible to guarantee continuous stability, for two reasons:
+
+1. Linux distributions frequently apply small changes to their installers, even on the same distribution version,
+1. automated testing is not feasible; although debootstrap installations could be automated, the bulk of the work is related to the installers, which can't be automated without sophisticated GUI automation,
+1. testing is time consuming, so it can be performed on a limited amount of distros at a time.
+
+Errors due to installer will cause the script to terminate, so, generally speaking, if the script completes, the system has been successfully setup.
 
 ## Demo
 

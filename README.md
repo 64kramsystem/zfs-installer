@@ -8,6 +8,7 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 - [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
 - [Instructions](#instructions)
   - [Ubuntu Server](#ubuntu-server)
+- [Stability](#stability)
 - [Demo](#demo)
   - [Unsupported systems/Issues](#unsupported-systemsissues)
   - [Unattended installations](#unattended-installations)
@@ -58,12 +59,22 @@ then follow the instructions; halfway through the procedure, the GUI installer o
 
 ### Ubuntu Server
 
-Ubuntu Server requires a slightly different execution procedure, and the version 0.3.x of the script (the [new procedure](https://openzfs.github.io/openzfs-docs/Getting%20Started/Ubuntu/Ubuntu%2020.04%20Root%20on%20ZFS.html) doesn't directly support Ubuntu Server):
+Ubuntu Server requires a slightly different execution procedure:
 
 - when the installer welcome screen shows up, tap `Ctrl+Alt+F2`,
-- then type `curl -L https://git.io/JGjA6 | sudo bash`.
+- then type `curl -L https://git.io/JelI5 | sudo bash`.
 
 then follow the instructions.
+
+## Stability
+
+The project is carefully developed, however, it's practically impossible to guarantee continuous stability, for two reasons:
+
+1. Linux distributions frequently apply small changes to their installers, even on the same distribution version,
+1. automated testing is not feasible; although debootstrap installations could be automated, the bulk of the work is related to the installers, which can't be automated without sophisticated GUI automation,
+1. testing is time consuming, so it can be performed on a limited amount of distros at a time.
+
+Errors due to installer will cause the script to terminate, so, generally speaking, if the script completes, the system has been successfully setup.
 
 ## Demo
 
@@ -90,7 +101,7 @@ This script needs to be run with admin permissions, from a Live CD.
 The procedure can be entirely automated via environment variables:
 
 - ZFS_OS_INSTALLATION_SCRIPT : path of a script to execute instead of Ubiquity (see dedicated section below)
-- ZFS_USE_PPAS               : set to 1 to use packages from `ppa:jonathonf/zfs` (automatically set to true if the O/S version doesn't ship at least v0.8)
+- ZFS_USE_PPA                : set to 1 to use packages from `ppa:jonathonf/zfs` (automatically set to true if the O/S version doesn't ship at least v0.8)
 - ZFS_SELECTED_DISKS         : full path of the devices to create the pool on, comma-separated
 - ZFS_PASSPHRASE
 - ZFS_RPOOL_NAME

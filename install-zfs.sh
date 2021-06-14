@@ -1,5 +1,4 @@
 #!/bin/bash
-# shellcheck disable=SC2015,SC2016
 
 # Shellcheck issue descriptions:
 #
@@ -119,7 +118,7 @@ USERDATA/%P                    mountpoint=/home/%P canmount=on com.ubuntu.zsys:b
 '
 c_zfs_mount_dir=/mnt
 c_installed_os_mount_dir=/target
-declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 
@@ -1179,7 +1178,7 @@ function create_pools_and_datasets {
     "$v_rpool_name" "${v_pools_raid_type[@]}" "${rpool_disks_partitions[@]}" \
     < "$c_passphrase_named_pipe"
 
-  # DATASETS CREATION ##################
+  # RPOOL DATASETS CREATION ############
 
   local interpolated_dataset_create_options
   interpolated_dataset_create_options=$(eval echo \""$v_dataset_create_options"\")
@@ -1210,13 +1209,19 @@ function create_pools_and_datasets {
   # In case of changes, don't forget that the destination layout may be empty, at this point, due to
   # the user's ZFS filesystems configuration!
 
-  # BOOT POOL CREATION #################
+  # BOOT POOL/DATASETS CREATION ########
+
+  # Creating the datasets is not necessary, however, it avoids the annoying GRUB warning when updating
+  # (`cannot open 'bpool/BOOT/ROOT': dataset does not exist`).
 
   zpool create \
     -o cachefile=/etc/zfs/zpool.cache \
     "${v_bpool_create_options[@]}" \
-    -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \
+    -O mountpoint=/boot -O canmount=off -R "$c_zfs_mount_dir" -f \
     "$c_bpool_name" "${v_pools_raid_type[@]}" "${bpool_disks_partitions[@]}"
+
+  zfs create -o canmount=off "$c_bpool_name/BOOT"
+  zfs create -o mountpoint=/boot "$c_bpool_name/BOOT/ROOT"
 }
 
 function create_swap_volume {
@@ -1370,11 +1375,25 @@ function install_jail_zfs_packages_UbuntuServer {
   fi
 }
 
-function prepare_efi_partition {
-  # The other mounts are configured/synced in the EFI partitions sync stage.
-  #
-  chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[0]}"-part1) /boot/efi vfat defaults 0 0 > /etc/fstab"
+function prepare_fstab {
+  chroot_execute "true > /etc/fstab"
 
+  for ((i = 0; i < ${#v_selected_disks[@]}; i++)); do
+    if (( i == 0 )); then
+      local mountpoint=/boot/efi
+    else
+      local mountpoint=/boot/efi$((i + 1))
+    fi
+
+    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $mountpoint vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 0 >> /etc/fstab"
+  done
+
+  if (( v_swap_size > 0 )); then
+    chroot_execute "echo /dev/zvol/$v_rpool_name/swap none swap discard 0 0 >> /etc/fstab"
+  fi
+}
+
+function prepare_efi_partition {
   chroot_execute "mkdir -p /boot/efi"
   chroot_execute "mount /boot/efi"
 
@@ -1411,8 +1430,6 @@ function sync_efi_partitions {
   for ((i = 1; i < ${#v_selected_disks[@]}; i++)); do
     local synced_efi_partition_path="/boot/efi$((i + 1))"
 
-    chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[0]}"-part1) $synced_efi_partition_path vfat defaults 0 0 >> /etc/fstab"
-
     chroot_execute "mkdir -p $synced_efi_partition_path"
     chroot_execute "mount $synced_efi_partition_path"
 
@@ -1439,7 +1456,7 @@ function fix_filesystem_mount_ordering {
 
   # On Debian, this file may exist already.
   #
-  chroot_execute "[[ ! -f /etc/zfs/zed.d/history_event-zfs-list-cacher.sh ]] && ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/"
+  chroot_execute "if [[ ! -f /etc/zfs/zed.d/history_event-zfs-list-cacher.sh ]]; then ln -s /usr/lib/zfs-linux/zed.d/history_event-zfs-list-cacher.sh /etc/zfs/zed.d/; fi"
 
   # Assumed to be present by the zedlet above on Debian, but missing.
   # Filed issue: https://github.com/zfsonlinux/zfs/issues/9945.
@@ -1490,7 +1507,8 @@ function fix_filesystem_mount_ordering {
 }
 
 function configure_remaining_settings {
-  [[ $v_swap_size -gt 0 ]] && chroot_execute "echo /dev/zvol/$v_rpool_name/swap none swap discard 0 0 >> /etc/fstab" || true
+  # The swap volume, if specified, is set in the prepare_fstab() step.
+
   chroot_execute "echo RESUME=none > /etc/initramfs-tools/conf.d/resume"
 }
 
@@ -1593,6 +1611,7 @@ fi
 invoke "prepare_jail"
 invoke "install_jail_base_packages"
 invoke "install_jail_zfs_packages"
+invoke "prepare_fstab"
 invoke "prepare_efi_partition"
 invoke "configure_and_update_grub"
 invoke "sync_efi_partitions"

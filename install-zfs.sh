@@ -1,9 +1,6 @@
 #!/bin/bash
 
-# Shellcheck issue descriptions:
-#
-# - SC2015: <condition> && <operation> || true
-# - SC2016: annoying warning about using single quoted strings with characters used for interpolation
+# shellcheck disable=SC2016 # single quoted strings with characters used for interpolation
 
 set -o errexit
 set -o pipefail

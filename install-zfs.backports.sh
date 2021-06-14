@@ -1211,6 +1211,9 @@ function create_pools_and_datasets {
 
   # BOOT POOL CREATION #################
 
+  # We can't create the datasets with the old procedure; on boot, the `bpool` dataset is attempted to be mounted.
+  # Possibly, this can be fixed in configure_boot_pool_import()->ExecStart.
+
   zpool create \
     "${v_bpool_create_options[@]}" \
     -O mountpoint=/boot -R "$c_zfs_mount_dir" -f \

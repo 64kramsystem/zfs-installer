@@ -1385,6 +1385,11 @@ function prepare_fstab {
       local mountpoint=/boot/efi$((i + 1))
     fi
 
+    # Wait for /boot to be mounted before mounting the EFI partitions; we use the services as dependency
+    # rather than a mount (`requires-mounts-for`) because the `/boot` path may exist but still not mounted.
+    # It's important to give a long enough timeout time; on relatively slow machines (e.g. virtual machines),
+    # a timeout of 1 will fail.
+    #
     chroot_execute "echo /dev/disk/by-uuid/$(blkid -s UUID -o value "${v_selected_disks[i]}"-part1) $mountpoint vfat nofail,x-systemd.requires=zfs-mount.service,x-systemd.device-timeout=10 0 0 >> /etc/fstab"
   done
 

@@ -1099,7 +1099,7 @@ When the update option is presented, choose to update Subiquity to the latest ve
 At the partitioning stage:
 
 - select `Custom storage layout` -> `Done`
-- select `'"$v_temp_volume_device"'` -> `Edit`
+- select `'"${v_selected_disks[0]}"'/partition 4` -> `Edit`
   - set `Format:` to `ext4` (mountpoint will be automatically selected)
   - click `Save`
 - click `Done` -> `Continue` (ignore warning)

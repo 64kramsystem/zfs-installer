@@ -1090,6 +1090,9 @@ function install_operating_system_UbuntuServer {
   # Subiquity is designed to prevent the user from opening a terminal, which is (to say the least)
   # incongruent with the audience.
 
+  local selected_disk_subiquity_name
+  selected_disk_subiquity_name=$(lsblk -o model,serial -d -n "${v_selected_disks[0]}" | awk '{ print $1 "_" $2 }')
+
   local dialog_message='You'\''ll now need to run the Ubuntu Server installer (Subiquity).
 
 Switch back to the original terminal (Ctrl+Alt+F1), then proceed with the configuration as usual.
@@ -1099,7 +1102,7 @@ When the update option is presented, choose to update Subiquity to the latest ve
 At the partitioning stage:
 
 - select `Custom storage layout` -> `Done`
-- select `'"$v_temp_volume_device"'` -> `Edit`
+- select `'"$selected_disk_subiquity_name"'`/`partition 4` -> `Edit`
   - set `Format:` to `ext4` (mountpoint will be automatically selected)
   - click `Save`
 - click `Done` -> `Continue` (ignore warning)

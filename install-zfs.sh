@@ -14,7 +14,7 @@ set -o nounset
 # The same strategy can possibly be used for `v_root_passwd` (the difference being that is used
 # inside a jail); logging the ZFS commands is enough, for now.
 #
-# Note that `ZFS_PASSPHRASE` and `ZFS_POOLS_RAID_TYPE` consider the unset state (see help).
+# Note that `ZFS_PASSPHRASE` considers the unset state (see help).
 
 v_boot_partition_size=       # Integer number with `M` or `G` suffix
 v_bpool_create_options=      # array; see defaults below for format
@@ -23,7 +23,7 @@ v_root_password=             # Debian-only
 v_rpool_name=
 v_rpool_create_options=      # array; see defaults below for format
 v_dataset_create_options=    # string; see help for format
-v_pools_raid_type=()
+declare -A v_vdev_configs    # ([0,1,2]=mirror, ...)
 declare -a v_selected_disks  # (/dev/by-id/disk_id, ...)
 v_swap_size=                 # integer
 v_free_tail_space=           # integer
@@ -270,6 +270,60 @@ function checked_add_apt_repository {
   esac
 }
 
+# Prints the zpool create vdev options, for the current v_vdev_configs; for example:
+#
+#     mirror vdev1-part3 vdev2-part3 mirror vdev3-part3 vdev4-part3
+#
+# Input: $1 = `rpool`, `bpool`, `-` (the last doesn't append anything).
+#
+function compose_pool_create_vdev_options {
+  case $1 in
+  rpool)
+    local partition_suffix=-part3;;
+  bpool)
+    local partition_suffix=-part2;;
+  -)
+    local partition_suffix=;;
+  *)
+    >&2 echo "Wrong compose_pool_create_vdev_options() parameter: \`$1\`"
+    exit 1
+  esac
+
+  local result=
+
+  # First, we must put all the striping vdevs (which have blank vdev type).
+  #
+  for device_indexes in "${!v_vdev_configs[@]}"; do
+    local vdev_type=${v_vdev_configs[$device_indexes]}
+
+    if [[ -z $vdev_type ]]; then
+      mapfile -d, -t device_indexes < <(echo -n "$device_indexes")
+
+      for device_index in "${device_indexes[@]}"; do
+        result+=" ${v_selected_disks[$device_index]}$partition_suffix"
+      done
+    fi
+  done
+
+  # Then, all the other types.
+  #
+  for device_indexes in "${!v_vdev_configs[@]}"; do
+    local vdev_type=${v_vdev_configs[$device_indexes]}
+
+    if [[ -n $vdev_type ]]; then
+      result+=" $vdev_type"
+
+      mapfile -d, -t device_indexes < <(echo -n "$device_indexes")
+
+      for device_index in "${device_indexes[@]}"; do
+        result+=" ${v_selected_disks[$device_index]}$partition_suffix"
+      done
+    fi
+  done
+
+  echo -n "$result" | sed -e 's/^ //'
+}
+
 function chroot_execute {
   chroot $c_zfs_mount_dir bash -c "$1"
 }
@@ -295,7 +349,7 @@ The procedure can be entirely automated via environment variables:
 - ZFS_RPOOL_NAME
 - ZFS_BPOOL_CREATE_OPTIONS   : boot pool options to set on creation (see defaults below)
 - ZFS_RPOOL_CREATE_OPTIONS   : root pool options to set on creation (see defaults below)
-- ZFS_POOLS_RAID_TYPE        : options: blank (striping), `mirror`, `raidz`, `raidz2`, `raidz3`; if unset, it will be asked.
+- ZFS_VDEV_CONFIGS           : example: `[0,1]=mirror, [2,3]=mirror`; the (0-based) indexes refer to the selected disks
 - ZFS_DATASET_CREATE_OPTIONS : see explanation below
 - ZFS_NO_INFO_MESSAGES       : set 1 to skip informational messages
 - ZFS_SWAP_SIZE              : swap size (integer); set 0 for no swap
@@ -529,13 +583,13 @@ Currently set exports, for performing an unattended (as possible) installation w
 
 export ZFS_USE_PPA=$v_use_ppa
 export ZFS_SELECTED_DISKS=$(IFS=,; echo -n "${v_selected_disks[*]}")
+export ZFS_VDEV_CONFIGS='$(declare -p v_vdev_configs | perl -pe 's/.*?\((.+)\)/\1/')'
 export ZFS_BOOT_PARTITION_SIZE=$v_boot_partition_size
 export ZFS_PASSPHRASE=$(printf %q "$v_passphrase")
 export ZFS_DEBIAN_ROOT_PASSWORD=$(printf %q "$v_root_password")
 export ZFS_RPOOL_NAME=$v_rpool_name
 export ZFS_BPOOL_CREATE_OPTIONS=\"${v_bpool_create_options[*]}\"
 export ZFS_RPOOL_CREATE_OPTIONS=\"${v_rpool_create_options[*]}\"
-export ZFS_POOLS_RAID_TYPE=${v_pools_raid_type[*]}
 export ZFS_NO_INFO_MESSAGES=1
 export ZFS_SWAP_SIZE=$v_swap_size
 export ZFS_FREE_TAIL_SPACE=$v_free_tail_space"
@@ -546,13 +600,13 @@ export ZFS_FREE_TAIL_SPACE=$v_free_tail_space"
     local _="
 export ZFS_USE_PPA=
 export ZFS_SELECTED_DISKS=$(ls -l /dev/disk/by-id/ | perl -ane 'print "/dev/disk/by-id/@F[8]," if ! /\d$/ && ($c += 1) <= 2' | head -c -1)
+unset ZFS_VDEV_CONFIGS
 export ZFS_BOOT_PARTITION_SIZE=2048M
 export ZFS_PASSPHRASE=aaaaaaaa
 export ZFS_DEBIAN_ROOT_PASSWORD=a
 export ZFS_RPOOL_NAME=rpool
 export ZFS_BPOOL_CREATE_OPTIONS='-o ashift=12 -o autotrim=on -d -o feature@async_destroy=enabled -o feature@bookmarks=enabled -o feature@embedded_data=enabled -o feature@empty_bpobj=enabled -o feature@enabled_txg=enabled -o feature@extensible_dataset=enabled -o feature@filesystem_limits=enabled -o feature@hole_birth=enabled -o feature@large_blocks=enabled -o feature@lz4_compress=enabled -o feature@spacemap_histogram=enabled -O acltype=posixacl -O compression=lz4 -O devices=off -O normalization=formD -O relatime=on -O xattr=sa'
 export ZFS_RPOOL_CREATE_OPTIONS='-o ashift=12 -o autotrim=on -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O normalization=formD -O relatime=on -O xattr=sa -O devices=off'
-export ZFS_POOLS_RAID_TYPE=
 export ZFS_NO_INFO_MESSAGES=1
 export ZFS_SWAP_SIZE=2
 export ZFS_FREE_TAIL_SPACE=12
@@ -655,46 +709,74 @@ Devices with mounted partitions, cdroms, and removable devices are not displayed
   print_variables v_selected_disks
 }
 
-function select_pools_raid_type {
-  local raw_pools_raid_type=
+function select_vdev_configs {
+  if [[ -n ${ZFS_VDEV_CONFIGS:-} ]]; then
+    eval declare -gA v_vdev_configs=\("$ZFS_VDEV_CONFIGS"\)
+  elif [[ ${#v_selected_disks[@]} -eq 1 ]]; then
+    # Formally, this is striping.
+    #
+    v_vdev_configs[0]=
+  else
+    while true; do
+      # Since the values (group disks) are represented by strings, there's no direct way of counting
+      # all of them.
+      # Remember that in $v_vdev_configs, keys are the indexes!
+      #
+      local all_vdev_disks_count
+      all_vdev_disks_count=$(echo "${!v_vdev_configs[@]}" | perl -pe 's/[, ]/\n/g' | wc -l)
 
-  if [[ -v ZFS_POOLS_RAID_TYPE ]]; then
-    raw_pools_raid_type=$ZFS_POOLS_RAID_TYPE
-  elif [[ ${#v_selected_disks[@]} -ge 2 ]]; then
-    # Entries preparation.
+      if [[ $all_vdev_disks_count -eq ${#v_selected_disks[@]} ]]; then
+        break
+      fi
 
-    local menu_entries_option=(
-      ""      "Striping array" OFF
-      mirror  Mirroring        OFF
-      raidz   RAIDZ1           OFF
-    )
+      local current_setup
+      current_setup=$(compose_pool_create_vdev_options -)
 
-    if [[ ${#v_selected_disks[@]} -ge 3 ]]; then
-      menu_entries_option+=(raidz2 RAIDZ2 OFF)
-    fi
+      local dialog_message
+      dialog_message="Choose the disk group type.
 
-    if [[ ${#v_selected_disks[@]} -ge 4 ]]; then
-      menu_entries_option+=(raidz3 RAIDZ3 OFF)
-    fi
+Disks for this group will be selected in the next dialog.
 
-    # Defaults (ultimately, arbitrary). Based on https://calomel.org/zfs_raid_speed_capacity.html.
+This and the next dialog will be repeated until all the groups are defined, so that it's possible to configure complex setups.
 
-    if [[ ${#v_selected_disks[@]} -ge 11 ]]; then
-      menu_entries_option[14]=ON
-    elif [[ ${#v_selected_disks[@]} -ge 6 ]]; then
-      menu_entries_option[11]=ON
-    elif [[ ${#v_selected_disks[@]} -ge 5 ]]; then
-      menu_entries_option[8]=ON
-    else
-      menu_entries_option[5]=ON
-    fi
+WARNING! The installer allows creating pools with different replication levels (eg. stripe + mirror), and it also doesn't verify their correctness.
 
-    local dialog_message="Select the pools RAID type."
-    raw_pools_raid_type=$(whiptail --radiolist "$dialog_message" 30 100 $((${#menu_entries_option[@]} / 3)) "${menu_entries_option[@]}" 3>&1 1>&2 2>&3)
-  fi
+Current pool creation setup: ${current_setup:-(none)}"
 
-  if [[ -n $raw_pools_raid_type ]]; then
-    v_pools_raid_type=("$raw_pools_raid_type")
+      local vdev_types_option=(
+        ""       Striping  OFF
+        mirror   Mirroring OFF
+        raidz    RAIDZ1    OFF
+        raidz2   RAIDZ2    OFF
+        raidz3   RAIDZ3    OFF
+      )
+
+      local current_vdev_type
+      current_vdev_type=$(whiptail --radiolist "$dialog_message" 30 100 $((${#vdev_types_option[@]} / 3)) "${vdev_types_option[@]}" 3>&1 1>&2 2>&3)
+
+      local dialog_message="Choose the disks for the current disk group.
+
+If any disks are remaining, they will be made available for another group."
+
+      local current_vdev_disks_option=()
+
+      for (( i = 0; i < ${#v_selected_disks[@]}; i++ )); do
+        if ! echo "${!v_vdev_configs[@]}" | perl -pe 's/[, ]/\n/g' | grep "^$i$"; then
+          local disk_basename
+          disk_basename=$(basename "${v_selected_disks[i]}")
+          current_vdev_disks_option+=("$i" "$disk_basename" OFF)
+        fi
+      done
+
+      local current_vdev_indexes
+      current_vdev_indexes=$(whiptail --checklist --separate-output "$dialog_message" 30 100 $((${#current_vdev_disks_option[@]} / 3)) "${current_vdev_disks_option[@]}" 3>&1 1>&2 2>&3)
+
+      if [[ -n $current_vdev_indexes ]]; then
+        current_vdev_indexes=${current_vdev_indexes//$'\n'/,}
+        current_vdev_indexes=${current_vdev_indexes%,}
+        v_vdev_configs[$current_vdev_indexes]=$current_vdev_type
+      fi
+    done
   fi
 }
 
@@ -1142,19 +1224,12 @@ function create_pools_and_datasets {
   # POOL OPTIONS #######################
 
   local encryption_options=()
-  local rpool_disks_partitions=()
-  local bpool_disks_partitions=()
 
   set +x
   if [[ -n $v_passphrase ]]; then
     encryption_options=(-O "encryption=aes-256-gcm" -O "keylocation=prompt" -O "keyformat=passphrase")
   fi
   set -x
-
-  for selected_disk in "${v_selected_disks[@]}"; do
-    rpool_disks_partitions+=("${selected_disk}-part3")
-    bpool_disks_partitions+=("${selected_disk}-part2")
-  done
 
   # ROOT POOL CREATION #################
 
@@ -1165,8 +1240,11 @@ function create_pools_and_datasets {
   echo -n "$v_passphrase" > "$c_passphrase_named_pipe" &
   set -x
 
+  mapfile -d' ' -t rpool_create_vdev_options < <(compose_pool_create_vdev_options rpool)
+
   # `-R` creates an "Alternate Root Point", which is lost on unmount; it's just a convenience for a temporary mountpoint;
-  # `-f` force overwrite partitions is existing - in some cases, even after wipefs, a filesystem is mistakenly recognized
+  # `-f` force overwrite partitions is existing - in some cases, even after wipefs, a filesystem is mistakenly recognized;
+  #      it also forces vdevs with different replication levels;
   # `-O` set filesystem properties on a pool (pools and filesystems are distincted entities, however, a pool includes an FS by default).
   #
   # Stdin is ignored if the encryption is not set (and set via prompt).
@@ -1175,7 +1253,7 @@ function create_pools_and_datasets {
     "${encryption_options[@]}" \
     "${v_rpool_create_options[@]}" \
     -O mountpoint=/ -O canmount=off -R "$c_zfs_mount_dir" -f \
-    "$v_rpool_name" "${v_pools_raid_type[@]}" "${rpool_disks_partitions[@]}" \
+    "$v_rpool_name" "${rpool_create_vdev_options[@]}" \
     < "$c_passphrase_named_pipe"
 
   # RPOOL DATASETS CREATION ############
@@ -1211,6 +1289,8 @@ function create_pools_and_datasets {
 
   # BOOT POOL/DATASETS CREATION ########
 
+  mapfile -d' ' -t bpool_create_vdev_options < <(compose_pool_create_vdev_options bpool)
+
   # Creating the datasets is not necessary, however, it avoids the annoying GRUB warning when updating
   # (`cannot open 'bpool/BOOT/ROOT': dataset does not exist`).
 
@@ -1218,7 +1298,7 @@ function create_pools_and_datasets {
     -o cachefile=/etc/zfs/zpool.cache \
     "${v_bpool_create_options[@]}" \
     -O mountpoint=/boot -O canmount=off -R "$c_zfs_mount_dir" -f \
-    "$c_bpool_name" "${v_pools_raid_type[@]}" "${bpool_disks_partitions[@]}"
+    "$c_bpool_name" "${bpool_create_vdev_options[@]}"
 
   zfs create -o canmount=off "$c_bpool_name/BOOT"
   zfs create -o mountpoint=/boot "$c_bpool_name/BOOT/ROOT"
@@ -1591,7 +1671,7 @@ invoke "set_use_zfs_ppa"
 invoke "install_host_base_packages"
 
 invoke "select_disks"
-invoke "select_pools_raid_type"
+invoke "select_vdev_configs"
 invoke "ask_root_password" --optional
 invoke "ask_encryption"
 invoke "ask_boot_partition_size"

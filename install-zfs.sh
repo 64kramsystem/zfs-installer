@@ -594,24 +594,6 @@ export ZFS_NO_INFO_MESSAGES=1
 export ZFS_SWAP_SIZE=$v_swap_size
 export ZFS_FREE_TAIL_SPACE=$v_free_tail_space"
 
-    # Convenient ready exports (selecting the first two disks):
-    #
-    # shellcheck disable=SC2155,SC2012
-    local _="
-export ZFS_USE_PPA=
-export ZFS_SELECTED_DISKS=$(ls -l /dev/disk/by-id/ | perl -ane 'print "/dev/disk/by-id/@F[8]," if ! /\d$/ && ($c += 1) <= 2' | head -c -1)
-unset ZFS_VDEV_CONFIGS
-export ZFS_BOOT_PARTITION_SIZE=2048M
-export ZFS_PASSPHRASE=aaaaaaaa
-export ZFS_DEBIAN_ROOT_PASSWORD=a
-export ZFS_RPOOL_NAME=rpool
-export ZFS_BPOOL_CREATE_OPTIONS='-o ashift=12 -o autotrim=on -d -o feature@async_destroy=enabled -o feature@bookmarks=enabled -o feature@embedded_data=enabled -o feature@empty_bpobj=enabled -o feature@enabled_txg=enabled -o feature@extensible_dataset=enabled -o feature@filesystem_limits=enabled -o feature@hole_birth=enabled -o feature@large_blocks=enabled -o feature@lz4_compress=enabled -o feature@spacemap_histogram=enabled -O acltype=posixacl -O compression=lz4 -O devices=off -O normalization=formD -O relatime=on -O xattr=sa'
-export ZFS_RPOOL_CREATE_OPTIONS='-o ashift=12 -o autotrim=on -O acltype=posixacl -O compression=lz4 -O dnodesize=auto -O normalization=formD -O relatime=on -O xattr=sa -O devices=off'
-export ZFS_NO_INFO_MESSAGES=1
-export ZFS_SWAP_SIZE=2
-export ZFS_FREE_TAIL_SPACE=12
-    "
-
     set -x
   }
   trap _exit_hook EXIT

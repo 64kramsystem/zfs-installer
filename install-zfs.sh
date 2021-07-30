@@ -118,6 +118,7 @@ c_installed_os_mount_dir=/target
 declare -A c_supported_linux_distributions=([Debian]=10 [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
+c_dns=8.8.8.8
 
 c_log_dir=$(dirname "$(mktemp)")/zfs-installer
 c_install_log=$c_log_dir/install.log
@@ -360,7 +361,7 @@ The procedure can be entirely automated via environment variables:
 When installing the O/S via $ZFS_OS_INSTALLATION_SCRIPT, the root pool is mounted as `'$c_zfs_mount_dir'`; the requisites are:
 
 1. the virtual filesystems must be mounted in `'$c_zfs_mount_dir'` (ie. `for vfs in proc sys dev; do mount --rbind /$vfs '$c_zfs_mount_dir'/$vfs; done`)
-2. internet must be accessible while chrooting in `'$c_zfs_mount_dir'` (ie. `echo nameserver 8.8.8.8 >> '$c_zfs_mount_dir'/etc/resolv.conf`)
+2. internet must be accessible while chrooting in `'$c_zfs_mount_dir'` (ie. `echo nameserver '$c_dns' >> '$c_zfs_mount_dir'/etc/resolv.conf`)
 3. `'$c_zfs_mount_dir'` must be left in a dismountable state (e.g. no file locks, no swap etc.);
 
 Boot pool default create options: '"${c_default_bpool_create_options[*]/#-/$'\n'  -}"'
@@ -1377,7 +1378,7 @@ function prepare_jail {
     mount --rbind "/$virtual_fs_dir" "$c_zfs_mount_dir/$virtual_fs_dir"
   done
 
-  chroot_execute 'echo "nameserver 8.8.8.8" >> /etc/resolv.conf'
+  chroot_execute "echo 'nameserver $c_dns' >> /etc/resolv.conf"
 }
 
 # Same principle as install_host_base_packages().

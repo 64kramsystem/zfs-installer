@@ -451,6 +451,9 @@ function check_prerequisites {
     #
     echo "The PPA is not (currently) supported on Ubuntu Server!"
     exit 1
+  elif ! ping -c 1 "$c_dns" > /dev/null; then
+    echo "Can't contact the DNS ($c_dns)!"
+    exit 1
   fi
 
   set +x

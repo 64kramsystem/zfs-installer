@@ -556,7 +556,7 @@ function find_suitable_disks {
 
 If you'\''re running inside a VMWare virtual machine, you need to add set `disk.EnableUUID = "TRUE"` in the .vmx configuration file.
 
-If you think this is a bug, please open an issue on https://github.com/saveriomiroddi/zfs-installer/issues, and attach the file `'"$c_disks_log"'`.
+If you think this is a bug, please open an issue on https://github.com/64kramsystem/zfs-installer/issues, and attach the file `'"$c_disks_log"'`.
 '
     whiptail --msgbox "$dialog_message" 30 100
 
@@ -859,7 +859,7 @@ If the tail space is less than the space required for the temporary O/S installa
 
 WATCH OUT! In rare cases, the reclamation may cause an error; if this happens, set the tail space to ${c_temporary_volume_size} gigabytes. It's still possible to reclaim the space after the ZFS installation is over.
 
-For detailed informations, see the wiki page: https://github.com/saveriomiroddi/zfs-installer/wiki/Tail-space-reclamation-issue.
+For detailed informations, see the wiki page: https://github.com/64kramsystem/zfs-installer/wiki/Tail-space-reclamation-issue.
 "
 
     while [[ ! $v_free_tail_space =~ ^[0-9]+$ ]]; do
@@ -1524,7 +1524,7 @@ function sync_efi_partitions {
 }
 
 # This step is important in cases where the keyboard layout is not the standard one.
-# See issue https://github.com/saveriomiroddi/zfs-installer/issues/110.
+# See issue https://github.com/64kramsystem/zfs-installer/issues/110.
 #
 function update_initramfs {
   chroot_execute "update-initramfs -u"

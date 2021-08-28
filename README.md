@@ -1,5 +1,3 @@
-[![Build Status][BS IMG]](https://travis-ci.org/64kramsystem/zfs-installer)
-
 # zfs-installer
 
 ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
@@ -140,5 +138,3 @@ The [ZFS Discuss forum](https://zfsonlinux.topicbox.com/groups/zfs-discuss) is a
 The workflow of this program is based on the official ZFS wiki procedure, so, many thanks to the ZFS team.
 
 As my other open source work and [technical writing](https://saveriomiroddi.github.io), this project is sponsored by [Ticketsolve](https://ticketsolve.com).
-
-[BS img]: https://travis-ci.org/64kramsystem/zfs-installer.svg?branch=master

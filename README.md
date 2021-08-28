@@ -1,5 +1,3 @@
-[![Build Status][BS IMG]](https://travis-ci.org/saveriomiroddi/zfs-installer)
-
 # zfs-installer
 
 ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
@@ -53,7 +51,7 @@ The advantages of this project over the Ubuntu installer are:
 Start the live CD of a supported Linux distribution, then open a terminal and execute:
 
 ```sh
-GET https://git.io/JelI5 | sudo bash
+GET https://git.io/JEw00 | sudo bash
 ```
 
 then follow the instructions; halfway through the procedure, the GUI installer of the O/S will be launched.
@@ -63,7 +61,7 @@ then follow the instructions; halfway through the procedure, the GUI installer o
 Ubuntu Server requires a slightly different execution procedure:
 
 - when the installer welcome screen shows up, tap `Ctrl+Alt+F2`,
-- then type `curl -L https://git.io/JelI5 | sudo bash`.
+- then type `curl -L https://git.io/JEw00 | sudo bash`.
 
 then follow the instructions.
 
@@ -92,7 +90,7 @@ The installer itself can run over SSH (\[S\]Ubiquity of course needs to be still
 The program supports unattended installation, via environment variables. The program built-in help explains all the options:
 
 ```
-$ wget -qO- https://git.io/JelI5 | bash /dev/stdin --help
+$ wget -qO- https://git.io/JEw00 | bash /dev/stdin --help
 Usage: install-zfs.sh [-h|--help]
 
 Sets up and install a ZFS Ubuntu installation.
@@ -125,13 +123,13 @@ Other options may be supported, and displayed in the current commandline help, s
 
 This project is entirely oriented to community requests, as the target is to facilitate ZFS adoption.
 
-Both for feature requests and bugs, [open a GitHub issue](https://github.com/saveriomiroddi/zfs-installer/issues/new).
+Both for feature requests and bugs, [open a GitHub issue](https://github.com/64kramsystem/zfs-installer/issues/new).
 
 For issues, also attach the content of the directory `/tmp/zfs-installer`. It doesn't contain any information aside what required for performing the installation; it can be trivially inspected, as it's a standard Bash debug output.
 
 ## Help
 
-For requests that are not strictly bugs (confirmed or suspected), feel free to post on the project [discussion board](https://github.com/saveriomiroddi/zfs-installer/discussions). Differently from bugs/feature requests, replies are not guaranteed, however, even if there is no official reply, somebody else may still help.
+For requests that are not strictly bugs (confirmed or suspected), feel free to post on the project [discussion board](https://github.com/64kramsystem/zfs-installer/discussions). Differently from bugs/feature requests, replies are not guaranteed, however, even if there is no official reply, somebody else may still help.
 
 The [ZFS Discuss forum](https://zfsonlinux.topicbox.com/groups/zfs-discuss) is also a good place where to post this type of requests.
 
@@ -140,5 +138,3 @@ The [ZFS Discuss forum](https://zfsonlinux.topicbox.com/groups/zfs-discuss) is a
 The workflow of this program is based on the official ZFS wiki procedure, so, many thanks to the ZFS team.
 
 As my other open source work and [technical writing](https://saveriomiroddi.github.io), this project is sponsored by [Ticketsolve](https://ticketsolve.com).
-
-[BS img]: https://travis-ci.org/saveriomiroddi/zfs-installer.svg?branch=master

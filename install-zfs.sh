@@ -1410,7 +1410,7 @@ function install_jail_zfs_packages {
     #
     # The packages are not installed by default, so we install them.
     #
-    chroot_execute "apt install --yes libzfs2linux zfs-initramfs zfs-zed zfsutils-linux"
+    chroot_execute "apt install --yes zfs-initramfs zfs-zed zfsutils-linux"
   fi
 }
 

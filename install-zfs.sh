@@ -115,7 +115,7 @@ USERDATA/%P                    mountpoint=/home/%P canmount=on com.ubuntu.zsys:b
 '
 c_zfs_mount_dir=/mnt
 c_installed_os_mount_dir=/target
-declare -A c_supported_linux_distributions=([Debian]="10 11" [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1)
+declare -A c_supported_linux_distributions=([Debian]="10 11" [Ubuntu]="18.04 20.04" [UbuntuServer]="18.04 20.04" [LinuxMint]="19.1 19.2 19.3" [Linuxmint]="20 20.1" [elementary]=5.1 [Neon]="20.04")
 c_temporary_volume_size=12  # gigabytes; large enough - Debian, for example, takes ~8 GiB.
 c_passphrase_named_pipe=$(dirname "$(mktemp)")/zfs-installer.pp.fifo
 c_dns=8.8.8.8
@@ -1200,6 +1200,40 @@ You can switch anytime to this terminal, and back, in order to read the instruct
   fi
 
   rm -f "$c_installed_os_mount_dir"/swap.img
+}
+
+# See install_operating_system_Debian for comments, since it's also based on Calamares.
+#
+function install_operating_system_Neon {
+  local dialog_message='The Neon GUI installer will now be launched.
+
+Proceed with the configuration as usual, then, at the partitioning stage:
+
+- check `Manual partitioning` -> `Next`
+- click on `'"${v_temp_volume_device}"'` in the filesystems panel -> `Edit`
+  - click on `Format`
+  - set `Mount Point` to `/` -> `OK`
+- `Next`
+- follow through the installation (ignore the EFI partition warning)
+- at the end, uncheck `Restart now`, and click `Done`
+'
+
+  if [[ -z ${ZFS_NO_INFO_MESSAGES:-} ]]; then
+    whiptail --msgbox "$dialog_message" 30 100
+  fi
+
+  # See install_operating_system().
+  #
+  sudo -u "$SUDO_USER" env DISPLAY=:0 xhost +
+
+  DISPLAY=:0 calamares
+
+  mkdir -p "$c_installed_os_mount_dir"
+
+  # Note how in Debian, for reasons currenly unclear, the mount fails if the partition is passed;
+  # it requires the device to be passed.
+  #
+  mount "${v_temp_volume_device}" "$c_installed_os_mount_dir"
 }
 
 function custom_install_operating_system {

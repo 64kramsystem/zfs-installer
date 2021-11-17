@@ -449,7 +449,7 @@ function check_prerequisites {
   elif [[ ${ZFS_USE_PPA:-} == "1" && $v_linux_distribution == "UbuntuServer" ]]; then
     # As of Jun/2021, it breaks the installation.
     #
-    echo "The PPA is not (currently) supported on Ubuntu Server!"
+    echo "The PPA is not (currently) supported on Ubuntu Server! It's still possible to add it after the installation, but there are no guarantees."
     exit 1
   elif ! ping -c 1 "$c_dns" > /dev/null; then
     echo "Can't contact the DNS ($c_dns)!"

@@ -73,7 +73,13 @@ The project is carefully developed, however, it's practically impossible to guar
 1. automated testing is not feasible; although debootstrap installations could be automated, the bulk of the work is related to the installers, which can't be automated without sophisticated GUI automation,
 1. testing is time consuming, so it can be performed on a limited amount of distros at a time.
 
-Errors due to installer will cause the script to terminate, so, generally speaking, if the script completes, the system has been successfully setup.
+Broadly speaking, there are two types of breakages:
+
+1. minor changes directly or indirectly related to the installer, for example:
+  - partition mounts change behavior (e.g. when they're dismounted)
+  - installed services change behavior (e.g. a new service creates an ephemeral file under /target/run, and the sync fails because the file disappears)
+1. GRUB setup not working
+   - most annoying issue to debug; the installer will succeed, but the installed O/S won't boot
 
 ## Demo
 

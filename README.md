@@ -2,6 +2,7 @@
 
 ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
 
+- [Project status](#project-status)
 - [Requirements and functionality](#requirements-and-functionality)
 - [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
 - [Instructions](#instructions)
@@ -13,6 +14,16 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 - [Bug reporting/feature requests](#bug-reportingfeature-requests)
 - [Help](#help)
 - [Credits](#credits)
+
+## Project status
+
+The project is in passive maintenance: I accept PRs but not issues, and I may apply minor changes on an irregular basis. Issues and discussions will be deactivated from Mon 29/Nov.
+
+PR are always welcome! 😄 I guarantee quick feedback.
+
+The reason for the discontinuation of the active maintenance is that O/S installers don't have stable specifications (see the [stability section](#stability)), and I don't have the resources to investigate breakages.
+
+Supported distros may or may not work; I only guarantee support for Ubuntu Desktop LTS versions, since it's the distribution I use.
 
 ## Requirements and functionality
 

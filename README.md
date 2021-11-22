@@ -2,6 +2,7 @@
 
 ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
 
+- [Project status](#project-status)
 - [Requirements and functionality](#requirements-and-functionality)
 - [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
 - [Instructions](#instructions)
@@ -13,6 +14,16 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 - [Bug reporting/feature requests](#bug-reportingfeature-requests)
 - [Help](#help)
 - [Credits](#credits)
+
+## Project status
+
+The project is in passive maintenance: I accept PRs but not issues, and I may apply minor changes on an irregular basis. Issues and discussions will be deactivated from Mon 29/Nov.
+
+PR are always welcome! 😄 I guarantee quick feedback.
+
+The reason for the discontinuation of the active maintenance is that O/S installers don't have stable specifications (see the [stability section](#stability)), and I don't have the resources to investigate breakages.
+
+Supported distros may or may not work; I only guarantee support for Ubuntu Desktop LTS versions, since it's the distribution I use.
 
 ## Requirements and functionality
 
@@ -73,7 +84,13 @@ The project is carefully developed, however, it's practically impossible to guar
 1. automated testing is not feasible; although debootstrap installations could be automated, the bulk of the work is related to the installers, which can't be automated without sophisticated GUI automation,
 1. testing is time consuming, so it can be performed on a limited amount of distros at a time.
 
-Errors due to installer will cause the script to terminate, so, generally speaking, if the script completes, the system has been successfully setup.
+Broadly speaking, there are two types of breakages:
+
+1. minor changes directly or indirectly related to the installer, for example:
+  - partition mounts change behavior (e.g. when they're dismounted)
+  - installed services change behavior (e.g. a new service creates an ephemeral file under /target/run, and the sync fails because the file disappears)
+1. GRUB setup not working
+   - most annoying issue to debug; the installer will succeed, but the installed O/S won't boot
 
 ## Demo
 

@@ -89,7 +89,7 @@ Broadly speaking, there are two types of breakages:
 1. minor changes directly or indirectly related to the installer, for example:
   - partition mounts change behavior (e.g. when they're dismounted)
   - installed services change behavior (e.g. a new service creates an ephemeral file under /target/run, and the sync fails because the file disappears)
-1. GRUB setup not working
+2. GRUB setup not working
    - most annoying issue to debug; the installer will succeed, but the installed O/S won't boot
 
 ## Demo

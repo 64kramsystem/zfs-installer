@@ -17,7 +17,7 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 
 ## Project status
 
-The project is in passive maintenance: I accept PRs but not issues, and I may apply minor changes on an irregular basis. Issues and discussions will be deactivated from Mon 29/Nov.
+The project is in passive maintenance: I accept PRs but not issues, and I may apply minor changes on an irregular basis. Issues and discussions have been deactivated.
 
 PR are always welcome! 😄 I guarantee quick feedback.
 
@@ -29,7 +29,7 @@ Supported distros may or may not work; I only guarantee support for Ubuntu Deskt
 
 The program currently supports:
 
-- Ubuntu Desktop 18.04.x/20.04 Live
+- Ubuntu Desktop 18.04.x/20.04 Live (reported to be working also on 22.04)
 - Ubuntu Server 18.04.x/20.04 Live
 - Linux Mint 19.x, 20
 - Debian 10.x/11.x Live (desktop environment required)
@@ -146,9 +146,9 @@ For issues, also attach the content of the directory `/tmp/zfs-installer`. It do
 
 ## Help
 
-For requests that are not strictly bugs (confirmed or suspected), feel free to post on the project [discussion board](https://github.com/64kramsystem/zfs-installer/discussions). Differently from bugs/feature requests, replies are not guaranteed, however, even if there is no official reply, somebody else may still help.
+Since support for this project has been discontinued, the best place to request help is the [ZFS Discuss forum](https://zfsonlinux.topicbox.com/groups/zfs-discuss).
 
-The [ZFS Discuss forum](https://zfsonlinux.topicbox.com/groups/zfs-discuss) is also a good place where to post this type of requests.
+For the same reason, it's not great etiquette to write me an email asking for help 😬
 
 ## Credits
 

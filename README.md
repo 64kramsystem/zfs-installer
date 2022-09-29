@@ -2,6 +2,7 @@
 
 ZFS installer is a shell script program that fully prepares ZFS on a system, and allows an effortless installation of several Debian-based operating systems using their standard installer (or debootstrap, or any custom script).
 
+- [Project status](#project-status)
 - [Requirements and functionality](#requirements-and-functionality)
 - [Comparison with Ubuntu built-in installer](#comparison-with-ubuntu-built-in-installer)
 - [Instructions](#instructions)
@@ -14,12 +15,22 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 - [Help](#help)
 - [Credits](#credits)
 
+## Project status
+
+The project is in passive maintenance: I accept PRs but not issues, and I may apply minor changes on an irregular basis. Issues and discussions have been deactivated.
+
+PR are always welcome! 😄 I guarantee quick feedback.
+
+The reason for the discontinuation of the active maintenance is that O/S installers don't have stable specifications (see the [stability section](#stability)), and I don't have the resources to investigate breakages.
+
+Supported distros may or may not work; I only guarantee support for Ubuntu Desktop LTS versions, since it's the distribution I use.
+
 ## Requirements and functionality
 
 The program currently supports:
 
-- Ubuntu Desktop 18.04.x/20.04 Live
-- Ubuntu Server 18.04.x/20.04 Live
+- Ubuntu Desktop 18.04.x/20.04/22.04 Live
+- Ubuntu Server 18.04.x/20.04/22.04 Live
 - Linux Mint 19.x, 20
 - Debian 10.x/11.x Live (desktop environment required)
 - ElementaryOS 5.1
@@ -73,7 +84,13 @@ The project is carefully developed, however, it's practically impossible to guar
 1. automated testing is not feasible; although debootstrap installations could be automated, the bulk of the work is related to the installers, which can't be automated without sophisticated GUI automation,
 1. testing is time consuming, so it can be performed on a limited amount of distros at a time.
 
-Errors due to installer will cause the script to terminate, so, generally speaking, if the script completes, the system has been successfully setup.
+Broadly speaking, there are two types of breakages:
+
+1. minor changes directly or indirectly related to the installer, for example:
+  - partition mounts change behavior (e.g. when they're dismounted)
+  - installed services change behavior (e.g. a new service creates an ephemeral file under /target/run, and the sync fails because the file disappears)
+2. GRUB setup not working
+   - most annoying issue to debug; the installer will succeed, but the installed O/S won't boot
 
 ## Demo
 
@@ -129,9 +146,9 @@ For issues, also attach the content of the directory `/tmp/zfs-installer`. It do
 
 ## Help
 
-For requests that are not strictly bugs (confirmed or suspected), feel free to post on the project [discussion board](https://github.com/64kramsystem/zfs-installer/discussions). Differently from bugs/feature requests, replies are not guaranteed, however, even if there is no official reply, somebody else may still help.
+Since support for this project has been discontinued, the best place to request help is the [ZFS Discuss forum](https://zfsonlinux.topicbox.com/groups/zfs-discuss).
 
-The [ZFS Discuss forum](https://zfsonlinux.topicbox.com/groups/zfs-discuss) is also a good place where to post this type of requests.
+For the same reason, it's not great etiquette to write me an email asking for help 😬
 
 ## Credits
 

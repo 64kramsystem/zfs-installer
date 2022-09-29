@@ -29,8 +29,8 @@ Supported distros may or may not work; I only guarantee support for Ubuntu Deskt
 
 The program currently supports:
 
-- Ubuntu Desktop 18.04.x/20.04 Live (reported to be working also on 22.04)
-- Ubuntu Server 18.04.x/20.04 Live
+- Ubuntu Desktop 18.04.x/20.04/22.04 Live
+- Ubuntu Server 18.04.x/20.04/22.04 Live
 - Linux Mint 19.x, 20
 - Debian 10.x/11.x Live (desktop environment required)
 - ElementaryOS 5.1

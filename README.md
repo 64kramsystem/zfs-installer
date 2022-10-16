@@ -17,13 +17,13 @@ ZFS installer is a shell script program that fully prepares ZFS on a system, and
 
 ## Project status
 
-The project is in passive maintenance: I accept PRs but not issues, and I may apply minor changes on an irregular basis. Issues and discussions have been deactivated.
+The project is, sadly, closed.
 
-PR are always welcome! 😄 I guarantee quick feedback.
+Unfortunately, O/S installers don't have (stable) specifications (see the [stability section](#stability)), and I don't have the resources to update the project.
 
-The reason for the discontinuation of the active maintenance is that O/S installers don't have stable specifications (see the [stability section](#stability)), and I don't have the resources to investigate breakages.
+The ZFS developers decided to work together with Canonical, which makes sense. Although Canonical's pace is very slow and it may not reach convenient features (customizations) for a very long time (if ever), integrating ZFS in the default installer is an impactful choice. Of course, this leaves other distributions without any easy mean to setup ZFS... well, complain to the ZFS devs 😜
 
-Supported distros may or may not work; I only guarantee support for Ubuntu Desktop LTS versions, since it's the distribution I use.
+As of Ubuntu 22.04, those who want to easily prepare non-trivial ZFS setups (e.g. encryption+mirroring) can still do it easily (although in limited form, e.g. no EFI partition mirroring, and so on), by using the Ubuntu installer to configure a ZFS scheme, then adding new volumes after the first boot.
 
 ## Requirements and functionality
 
@@ -91,6 +91,10 @@ Broadly speaking, there are two types of breakages:
   - installed services change behavior (e.g. a new service creates an ephemeral file under /target/run, and the sync fails because the file disappears)
 2. GRUB setup not working
    - most annoying issue to debug; the installer will succeed, but the installed O/S won't boot
+
+Unfortunately, the installer can't just skip (or even attempt to handle) unknown errors - the breakage surface is very large, and on large enough scale, it'd cause breakages.
+
+I can't even simply accept PRs that have been tested on the author system with the best intentions, because without considerable testing, they may be ineffective/broken on other systems (this did happen).
 
 ## Demo
 
